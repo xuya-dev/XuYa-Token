@@ -30,30 +30,29 @@ public class DefaultPermissionChecker implements PermissionChecker {
         this.permissionLoader = permissionLoader;
     }
 
-    /** 判断用户是否拥有指定角色(含继承得到的角色身份)。 */
+    /** 判断用户是否拥有指定角色(按用户体系,含继承得到的角色身份)。 */
     @Override
     public boolean hasRole(UserInfo user, String roleCode) {
-        return user != null && RoleExpander.expand(permissionLoader, user.getRoleCodes()).contains(roleCode);
+        return user != null && expand(user).contains(roleCode);
     }
 
-    /** 用户拥有全部给定角色(含继承)时返回 true。 */
+    /** 用户拥有全部给定角色(按用户体系,含继承)时返回 true。 */
     @Override
     public boolean hasAllRoles(UserInfo user, String... roleCodes) {
-        return user != null
-                && RoleExpander.expand(permissionLoader, user.getRoleCodes()).containsAll(Arrays.asList(roleCodes));
+        return user != null && expand(user).containsAll(Arrays.asList(roleCodes));
     }
 
-    /** 用户拥有任一给定角色(含继承)时返回 true。 */
+    /** 用户拥有任一给定角色(按用户体系,含继承)时返回 true。 */
     @Override
     public boolean hasAnyRole(UserInfo user, String... roleCodes) {
         if (user == null) {
             return false;
         }
-        Set<String> expanded = RoleExpander.expand(permissionLoader, user.getRoleCodes());
+        Set<String> expanded = expand(user);
         return Arrays.stream(roleCodes).anyMatch(expanded::contains);
     }
 
-    /** 判断用户是否拥有指定权限(继承角色的权限一并生效,支持通配符)。 */
+    /** 判断用户是否拥有指定权限(按用户体系,继承角色的权限一并生效,支持通配符)。 */
     @Override
     public boolean hasPermission(UserInfo user, String permissionExpr) {
         if (user == null) {
@@ -61,7 +60,7 @@ public class DefaultPermissionChecker implements PermissionChecker {
         }
         Permission required = Permission.of(permissionExpr);
         Set<Permission> granted = permissionLoader.loadPermissions(
-                RoleExpander.expand(permissionLoader, user.getRoleCodes()));
+                user.getUserType(), expand(user));
         return granted.stream().anyMatch(p -> p.implies(required));
     }
 
@@ -69,5 +68,10 @@ public class DefaultPermissionChecker implements PermissionChecker {
     @Override
     public boolean hasAnyPermission(UserInfo user, String... permissionExprs) {
         return Arrays.stream(permissionExprs).anyMatch(expr -> hasPermission(user, expr));
+    }
+
+    /** 按用户体系展开其角色继承链。 */
+    private Set<String> expand(UserInfo user) {
+        return RoleExpander.expand(user.getUserType(), permissionLoader, user.getRoleCodes());
     }
 }

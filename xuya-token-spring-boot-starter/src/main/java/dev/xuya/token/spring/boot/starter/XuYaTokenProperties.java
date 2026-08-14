@@ -3,7 +3,9 @@ package dev.xuya.token.spring.boot.starter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 配置属性,前缀 {@code xuya.token}。
@@ -36,6 +38,15 @@ public class XuYaTokenProperties {
 
     /** JWT 相关配置。 */
     private final Jwt jwt = new Jwt();
+
+    /** 按体系的策略覆盖(键为体系标识,如 b / c / open),未覆盖的体系沿用全局配置。 */
+    private final Map<String, UserTypeProperties> userTypes = new LinkedHashMap<>();
+
+    /**
+     * 按体系隔离的路径规则:键为体系标识,值为 Ant 通配模式列表;
+     * 请求路径命中某体系模式而 token 体系不符时返回 403。
+     */
+    private Map<String, List<String>> userTypePaths = new LinkedHashMap<>();
 
     /** 获取携带 token 的 HTTP 请求头名称。 */
     public String getHeaderName() {
@@ -110,6 +121,51 @@ public class XuYaTokenProperties {
     /** 获取 JWT 配置。 */
     public Jwt getJwt() {
         return jwt;
+    }
+
+    /** 获取按体系的策略覆盖(键为体系标识)。 */
+    public Map<String, UserTypeProperties> getUserTypes() {
+        return userTypes;
+    }
+
+    /** 获取按体系隔离的路径规则。 */
+    public Map<String, List<String>> getUserTypePaths() {
+        return userTypePaths;
+    }
+
+    /** 设置按体系隔离的路径规则(键为体系标识,值为 Ant 模式列表)。 */
+    public void setUserTypePaths(Map<String, List<String>> userTypePaths) {
+        this.userTypePaths = userTypePaths;
+    }
+
+    /** 单个体系的策略覆盖,未设置(null)的项继承全局配置。 */
+    public static class UserTypeProperties {
+
+        /** 该体系空闲超时时间(毫秒),null 继承全局 timeout-millis。 */
+        private Long timeoutMillis;
+
+        /** 该体系单用户最大并发会话数,null 继承全局 max-sessions-per-user。 */
+        private Integer maxSessionsPerUser;
+
+        /** 获取该体系空闲超时(毫秒),可能为 null。 */
+        public Long getTimeoutMillis() {
+            return timeoutMillis;
+        }
+
+        /** 设置该体系空闲超时(毫秒)。 */
+        public void setTimeoutMillis(Long timeoutMillis) {
+            this.timeoutMillis = timeoutMillis;
+        }
+
+        /** 获取该体系最大并发会话数,可能为 null。 */
+        public Integer getMaxSessionsPerUser() {
+            return maxSessionsPerUser;
+        }
+
+        /** 设置该体系最大并发会话数。 */
+        public void setMaxSessionsPerUser(Integer maxSessionsPerUser) {
+            this.maxSessionsPerUser = maxSessionsPerUser;
+        }
     }
 
     /** JWT 无状态会话配置(需引入 xuya-token-jwt 模块)。 */

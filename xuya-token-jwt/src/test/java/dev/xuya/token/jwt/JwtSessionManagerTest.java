@@ -69,6 +69,17 @@ class JwtSessionManagerTest {
     }
 
     @Test
+    void typedCreateCarriesTypClaim() {
+        SessionManager manager = new JwtSessionManager(SECRET, 60_000);
+        Session session = manager.create("C", "u1");
+        assertEquals("C", session.getUserType());
+        Session resolved = manager.get(session.getToken());
+        assertNotNull(resolved);
+        assertEquals("C", resolved.getUserType());
+        assertEquals("u1", resolved.getUserId());
+    }
+
+    @Test
     void statelessOperationsAreNoOp() {
         SessionManager manager = new JwtSessionManager(SECRET, 60_000);
         // 不抛异常即可;注销/在线列表在无状态模式下为空实现

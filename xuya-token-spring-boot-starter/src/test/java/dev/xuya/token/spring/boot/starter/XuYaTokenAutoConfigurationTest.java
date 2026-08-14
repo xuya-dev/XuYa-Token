@@ -29,7 +29,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest(classes = XuYaTokenAutoConfigurationTest.App.class,
-        properties = "spring.main.banner-mode=off")
+        properties = {
+                "spring.main.banner-mode=off",
+                "xuya.token.exclude-paths=/login,/error,/c/login",
+                "xuya.token.user-type-paths.b=/admin/**",
+                "xuya.token.user-type-paths.c=/c/**",
+                "xuya.token.user-types.c.timeout-millis=2592000000"
+        })
 @AutoConfigureMockMvc
 class XuYaTokenAutoConfigurationTest {
 
@@ -71,6 +77,15 @@ class XuYaTokenAutoConfigurationTest {
                 }
 
                 @Override
+                public UserInfo authenticate(String userType, String username, String password) {
+                    // C 端:手机号登录,角色复用 admin(用于验证体系路径隔离独立于角色)
+                    if ("C".equalsIgnoreCase(userType) && "138".equals(username) && "1234".equals(password)) {
+                        return new UserInfo("c1", "bob", null, Set.of("admin"), Map.of(), "C");
+                    }
+                    return authenticate(username, password);
+                }
+
+                @Override
                 public UserInfo findById(String userId) {
                     return "1".equals(userId)
                             ? new UserInfo("1", "admin", "d1", Set.of("admin"), Map.of())
@@ -79,6 +94,16 @@ class XuYaTokenAutoConfigurationTest {
                                     : "3".equals(userId)
                                             ? new UserInfo("3", "carol", "d3", Set.of("guest"), Map.of())
                                             : null;
+                }
+
+                @Override
+                public UserInfo findById(String userType, String userId) {
+                    if ("C".equalsIgnoreCase(userType)) {
+                        return "c1".equals(userId)
+                                ? new UserInfo("c1", "bob", null, Set.of("admin"), Map.of(), "C")
+                                : null;
+                    }
+                    return findById(userId);
                 }
             };
         }
@@ -95,6 +120,17 @@ class XuYaTokenAutoConfigurationTest {
             @PostMapping("/login")
             public Map<String, String> login(@RequestParam String username, @RequestParam String password) {
                 return Map.of("token", authenticator.login(username, password).getToken());
+            }
+
+            @PostMapping("/c/login")
+            public Map<String, String> cLogin(@RequestParam String phone, @RequestParam String code) {
+                return Map.of("token", authenticator.login("C", phone, code).getToken());
+            }
+
+            @RequiresLogin
+            @GetMapping("/c/me")
+            public Map<String, String> cMe() {
+                return Map.of("userType", LoginContext.getUser().getUserType());
             }
 
             @GetMapping("/me")
@@ -204,6 +240,39 @@ class XuYaTokenAutoConfigurationTest {
         // carol:SELF 级别,低于接口要求的 DEPT
         String carol = login("carol");
         mockMvc.perform(MockMvcRequestBuilders.get("/scoped-data").header("Authorization", "Bearer " + carol))
+                .andExpect(status().isForbidden());
+    }
+
+    private String cLogin() throws Exception {
+        String body = mockMvc.perform(MockMvcRequestBuilders.post("/c/login")
+                        .param("phone", "138")
+                        .param("code", "1234")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return com.fasterxml.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(body).get("token").asText();
+    }
+
+    @Test
+    void cLoginIssuesTypedTokenAndPassesTypeCheck() throws Exception {
+        String token = cLogin();
+        org.junit.jupiter.api.Assertions.assertTrue(token.startsWith("C-"));
+        mockMvc.perform(MockMvcRequestBuilders.get("/c/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userType").value("C"));
+    }
+
+    @Test
+    void userTypePathIsolationBlocksCrossTypeAccess() throws Exception {
+        // C 端 token 访问 B 端管理接口:即使拥有 admin 角色也 403(体系路径隔离)
+        String cToken = cLogin();
+        mockMvc.perform(MockMvcRequestBuilders.get("/admin").header("Authorization", "Bearer " + cToken))
+                .andExpect(status().isForbidden());
+
+        // B 端 token 访问 C 端接口同样 403
+        String bToken = login("admin");
+        mockMvc.perform(MockMvcRequestBuilders.get("/c/me").header("Authorization", "Bearer " + bToken))
                 .andExpect(status().isForbidden());
     }
 }

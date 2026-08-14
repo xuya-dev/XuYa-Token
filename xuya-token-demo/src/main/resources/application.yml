@@ -10,7 +10,16 @@ xuya:
     permission-cache-ttl-millis: 60000
     exclude-paths:
       - /login
+      - /c/login
       - /error
+    # 多体系(端)策略:C 端 30 天免登录,B 端沿用全局 30 分钟
+    user-types:
+      c:
+        timeout-millis: 2592000000
+    # 体系路径隔离:C 端 token 访问管理端接口直接 403,反之亦然
+    user-type-paths:
+      b: [/admin/**, /profiles/**, /orders]
+      c: [/c/**]
     # JWT 无状态模式示例(需引入 xuya-token-jwt 依赖;与 Redis 会话二选一):
     # jwt:
     #   secret: "change-me-at-least-32-bytes-long-secret"

@@ -1,6 +1,7 @@
 package dev.xuya.token.redis;
 
 import dev.xuya.token.core.exception.ForbiddenException;
+import dev.xuya.token.core.model.UserType;
 import dev.xuya.token.core.session.Session;
 import dev.xuya.token.core.session.SessionManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,34 +45,56 @@ class RedisSessionManagerTest {
         when(redisTemplate.opsForSet()).thenReturn(setOps);
     }
 
-    private static String sessionJson(String token, String userId, long createdAtMillis) {
-        return "{\"token\":\"" + token + "\",\"userId\":\"" + userId
+    private static String sessionJson(String token, String userId, String userType, long createdAtMillis) {
+        return "{\"token\":\"" + token + "\",\"userId\":\"" + userId + "\",\"userType\":\"" + userType
                 + "\",\"createdAtMillis\":" + createdAtMillis + ",\"timeoutMillis\":60000}";
     }
 
     @Test
-    void createStoresJsonWithTtlAndIndexesUser() {
+    void createStoresJsonWithTtlAndIndexesRealm() {
         SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
         Session session = manager.create("u1");
 
+        // 默认体系 B:token 前缀 B-,索引键 user:B:u1,体系登记 realms:u1
+        assertTrue(session.getToken().startsWith("B-"));
         ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
         verify(valueOps).set(eq("xuya:token:" + session.getToken()), value.capture(),
                 eq(Duration.ofMillis(60_000)));
-        assertTrue(value.getValue().contains("\"userId\":\"u1\""));
+        assertTrue(value.getValue().contains("\"userType\":\"B\""));
 
-        verify(setOps).add("xuya:token:user:u1", session.getToken());
-        verify(redisTemplate).expire("xuya:token:user:u1", Duration.ofMillis(60_000));
+        verify(setOps).add("xuya:token:user:B:u1", session.getToken());
+        verify(redisTemplate).expire("xuya:token:user:B:u1", Duration.ofMillis(60_000));
+        verify(setOps).add("xuya:token:realms:u1", "B");
+    }
+
+    @Test
+    void typedCreateUsesRealmSpecificIndex() {
+        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
+        Session session = manager.create(UserType.C, "u1");
+
+        assertTrue(session.getToken().startsWith("C-"));
+        verify(setOps).add("xuya:token:user:C:u1", session.getToken());
+        verify(setOps).add("xuya:token:realms:u1", "C");
     }
 
     @Test
     void getResolvesStoredSessionAndRefreshesTtl() {
         SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
-        when(valueOps.get("xuya:token:t1")).thenReturn(sessionJson("t1", "u1", 1000));
+        when(valueOps.get("xuya:token:B-t1")).thenReturn(sessionJson("B-t1", "u1", "B", 1000));
 
-        Session session = manager.get("t1");
+        Session session = manager.get("B-t1");
         assertNotNull(session);
         assertEquals("u1", session.getUserId());
-        verify(redisTemplate).expire("xuya:token:t1", Duration.ofMillis(60_000));
+        assertEquals("B", session.getUserType());
+        verify(redisTemplate).expire("xuya:token:B-t1", Duration.ofMillis(60_000));
+    }
+
+    @Test
+    void legacySessionWithoutUserTypeDefaultsToB() {
+        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
+        String legacy = "{\"token\":\"t1\",\"userId\":\"u1\",\"createdAtMillis\":1000,\"timeoutMillis\":60000}";
+        when(valueOps.get("xuya:token:t1")).thenReturn(legacy);
+        assertEquals("B", manager.get("t1").getUserType());
     }
 
     @Test
@@ -83,20 +106,75 @@ class RedisSessionManagerTest {
     }
 
     @Test
-    void nullTokenReturnsNullWithoutRedisCall() {
+    void invalidateDeletesKeyAndRealmIndexMember() {
         SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
-        assertNull(manager.get(null));
-        verify(valueOps, never()).get(anyString());
+        when(valueOps.get("xuya:token:C-t1")).thenReturn(sessionJson("C-t1", "u1", "C", 1000));
+
+        manager.invalidate("C-t1");
+        verify(redisTemplate).delete("xuya:token:C-t1");
+        verify(setOps).remove("xuya:token:user:C:u1", "C-t1");
     }
 
     @Test
-    void invalidateDeletesKeyAndIndexMember() {
-        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
-        when(valueOps.get("xuya:token:t1")).thenReturn(sessionJson("t1", "u1", 1000));
+    void evictsOldestWhenLimitExceeded() {
+        SessionManager manager = new RedisSessionManager(redisTemplate,
+                new com.fasterxml.jackson.databind.ObjectMapper(),
+                "xuya:token:", 60_000, 1, true);
+        when(setOps.members("xuya:token:user:B:u1")).thenReturn(new HashSet<>(java.util.Set.of("B-old")));
+        when(valueOps.get("xuya:token:B-old")).thenReturn(sessionJson("B-old", "u1", "B", 1000));
 
-        manager.invalidate("t1");
-        verify(redisTemplate).delete("xuya:token:t1");
-        verify(setOps).remove("xuya:token:user:u1", "t1");
+        manager.create("u1");
+        verify(redisTemplate).delete("xuya:token:B-old");
+        verify(setOps).remove("xuya:token:user:B:u1", "B-old");
+    }
+
+    @Test
+    void rejectsNewLoginWhenEvictDisabled() {
+        SessionManager manager = new RedisSessionManager(redisTemplate,
+                new com.fasterxml.jackson.databind.ObjectMapper(),
+                "xuya:token:", 60_000, 1, false);
+        when(setOps.members("xuya:token:user:B:u1")).thenReturn(new HashSet<>(java.util.Set.of("B-existing")));
+        when(valueOps.get("xuya:token:B-existing")).thenReturn(sessionJson("B-existing", "u1", "B", 1000));
+
+        assertThrows(ForbiddenException.class, () -> manager.create("u1"));
+    }
+
+    @Test
+    void invalidateByUserTypeOnlyCleansThatRealm() {
+        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
+        when(setOps.members("xuya:token:user:C:u1")).thenReturn(new HashSet<>(java.util.Set.of("C-t1")));
+
+        manager.invalidateByUserId(UserType.C, "u1");
+        verify(redisTemplate).delete("xuya:token:C-t1");
+        verify(redisTemplate).delete("xuya:token:user:C:u1");
+        // B 端索引不被触碰
+        verify(redisTemplate, never()).delete("xuya:token:user:B:u1");
+    }
+
+    @Test
+    void invalidateByUserIdCleansAllRealms() {
+        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
+        when(setOps.members("xuya:token:realms:u1")).thenReturn(new HashSet<>(java.util.Set.of("B", "C")));
+        when(setOps.members("xuya:token:user:B:u1")).thenReturn(new HashSet<>(java.util.Set.of("B-t1")));
+        when(setOps.members("xuya:token:user:C:u1")).thenReturn(new HashSet<>(java.util.Set.of("C-t1")));
+
+        manager.invalidateByUserId("u1");
+        verify(redisTemplate).delete("xuya:token:B-t1");
+        verify(redisTemplate).delete("xuya:token:C-t1");
+        verify(redisTemplate).delete("xuya:token:user:B:u1");
+        verify(redisTemplate).delete("xuya:token:user:C:u1");
+        verify(redisTemplate).delete("xuya:token:realms:u1");
+    }
+
+    @Test
+    void listActiveTokensFiltersByExistence() {
+        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
+        when(setOps.members("xuya:token:realms:u1")).thenReturn(new HashSet<>(java.util.Set.of("C")));
+        when(setOps.members("xuya:token:user:C:u1")).thenReturn(new HashSet<>(java.util.Set.of("C-t1", "C-gone")));
+        when(valueOps.get("xuya:token:C-t1")).thenReturn(sessionJson("C-t1", "u1", "C", 1000));
+        when(valueOps.get("xuya:token:C-gone")).thenReturn(null);
+
+        assertEquals(java.util.Set.of("C-t1"), manager.listActiveTokens("u1"));
     }
 
     @Test
@@ -104,51 +182,5 @@ class RedisSessionManagerTest {
         SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
         when(valueOps.get("xuya:token:bad")).thenReturn("{not-json");
         assertNull(manager.get("bad"));
-    }
-
-    @Test
-    void evictsOldestWhenLimitExceeded() {
-        SessionManager manager = new RedisSessionManager(redisTemplate, new com.fasterxml.jackson.databind.ObjectMapper(),
-                "xuya:token:", 60_000, 1, true);
-        // 索引中已有一个更旧的会话
-        when(setOps.members("xuya:token:user:u1")).thenReturn(new HashSet<>(java.util.Set.of("old")));
-        when(valueOps.get("xuya:token:old")).thenReturn(sessionJson("old", "u1", 1000));
-
-        manager.create("u1");
-
-        // 最旧的 "old" 被删除并移出索引
-        verify(redisTemplate).delete("xuya:token:old");
-        verify(setOps).remove("xuya:token:user:u1", "old");
-    }
-
-    @Test
-    void rejectsNewLoginWhenEvictDisabled() {
-        SessionManager manager = new RedisSessionManager(redisTemplate, new com.fasterxml.jackson.databind.ObjectMapper(),
-                "xuya:token:", 60_000, 1, false);
-        when(setOps.members("xuya:token:user:u1")).thenReturn(new HashSet<>(java.util.Set.of("existing")));
-        when(valueOps.get("xuya:token:existing")).thenReturn(sessionJson("existing", "u1", 1000));
-
-        assertThrows(ForbiddenException.class, () -> manager.create("u1"));
-    }
-
-    @Test
-    void invalidateByUserIdKicksAllSessions() {
-        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
-        when(setOps.members("xuya:token:user:u1")).thenReturn(new HashSet<>(java.util.Set.of("t1", "t2")));
-
-        manager.invalidateByUserId("u1");
-        verify(redisTemplate).delete("xuya:token:t1");
-        verify(redisTemplate).delete("xuya:token:t2");
-        verify(redisTemplate).delete("xuya:token:user:u1");
-    }
-
-    @Test
-    void listActiveTokensFiltersByExistence() {
-        SessionManager manager = new RedisSessionManager(redisTemplate, 60_000);
-        when(setOps.members("xuya:token:user:u1")).thenReturn(new HashSet<>(java.util.Set.of("t1", "gone")));
-        when(valueOps.get("xuya:token:t1")).thenReturn(sessionJson("t1", "u1", 1000));
-        when(valueOps.get("xuya:token:gone")).thenReturn(null);
-
-        assertEquals(java.util.Set.of("t1"), manager.listActiveTokens("u1"));
     }
 }

@@ -27,8 +27,11 @@ public class UserInfo {
     /** 扩展属性(如邮箱、部门等)。 */
     private final Map<String, Object> attributes;
 
+    /** 所属用户体系标识(开放字符串,如 "B"、"C"、"OPEN"),见 {@link UserType}。 */
+    private final String userType;
+
     /**
-     * 构造无部门信息的用户。
+     * 构造无部门信息的用户(体系默认 B 端)。
      *
      * @param id         用户唯一标识
      * @param username   用户名
@@ -36,7 +39,21 @@ public class UserInfo {
      * @param attributes 扩展属性,可为 null(视为空)
      */
     public UserInfo(String id, String username, Set<String> roleCodes, Map<String, Object> attributes) {
-        this(id, username, null, roleCodes, attributes);
+        this(id, username, null, roleCodes, attributes, UserType.DEFAULT);
+    }
+
+    /**
+     * 构造用户信息(体系默认 B 端)。
+     *
+     * @param id         用户唯一标识
+     * @param username   用户名
+     * @param deptId     所属部门 ID,可为 null
+     * @param roleCodes  角色编码集合,可为 null(视为空)
+     * @param attributes 扩展属性,可为 null(视为空)
+     */
+    public UserInfo(String id, String username, String deptId,
+                    Set<String> roleCodes, Map<String, Object> attributes) {
+        this(id, username, deptId, roleCodes, attributes, UserType.DEFAULT);
     }
 
     /**
@@ -47,14 +64,16 @@ public class UserInfo {
      * @param deptId     所属部门 ID,可为 null
      * @param roleCodes  角色编码集合,可为 null(视为空)
      * @param attributes 扩展属性,可为 null(视为空)
+     * @param userType   所属用户体系标识,非法值归一化为默认体系
      */
     public UserInfo(String id, String username, String deptId,
-                    Set<String> roleCodes, Map<String, Object> attributes) {
+                    Set<String> roleCodes, Map<String, Object> attributes, String userType) {
         this.id = id;
         this.username = username;
         this.deptId = deptId;
         this.roleCodes = roleCodes == null ? Set.of() : Set.copyOf(roleCodes);
         this.attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+        this.userType = UserType.normalize(userType);
     }
 
     /** 获取用户唯一标识。 */
@@ -80,5 +99,10 @@ public class UserInfo {
     /** 获取扩展属性(不可变)。 */
     public Map<String, Object> getAttributes() {
         return Collections.unmodifiableMap(attributes);
+    }
+
+    /** 获取所属用户体系标识,永不为 null,见 {@link UserType}。 */
+    public String getUserType() {
+        return userType;
     }
 }

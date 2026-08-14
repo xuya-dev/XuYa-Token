@@ -1,15 +1,18 @@
 package dev.xuya.token.core.session;
 
+import dev.xuya.token.core.model.UserType;
+
 import java.time.Instant;
 
 /**
  * 绑定到不透明 token 的已认证会话。
+ * token 形如 {@code B-xxxx} / {@code C-xxxx},前缀为体系标识(开放字符串)。
  *
  * @author 青衣
  */
 public class Session {
 
-    /** 会话令牌。 */
+    /** 会话令牌,含体系前缀。 */
     private final String token;
 
     /** 会话所属用户 ID。 */
@@ -24,8 +27,11 @@ public class Session {
     /** 空闲超时时间,单位毫秒。 */
     private final long timeoutMillis;
 
+    /** 所属用户体系标识(开放字符串,如 "B"、"C"、"OPEN"),见 {@link UserType}。 */
+    private final String userType;
+
     /**
-     * 构造会话。
+     * 构造会话(体系默认 B 端)。
      *
      * @param token          会话令牌
      * @param userId         用户 ID
@@ -33,11 +39,25 @@ public class Session {
      * @param timeoutMillis  空闲超时时间(毫秒)
      */
     public Session(String token, String userId, Instant createdAt, long timeoutMillis) {
+        this(token, userId, createdAt, timeoutMillis, UserType.DEFAULT);
+    }
+
+    /**
+     * 构造会话(完整参数)。
+     *
+     * @param token          会话令牌
+     * @param userId         用户 ID
+     * @param createdAt      创建时间
+     * @param timeoutMillis  空闲超时时间(毫秒)
+     * @param userType       所属用户体系标识,非法值归一化为默认体系
+     */
+    public Session(String token, String userId, Instant createdAt, long timeoutMillis, String userType) {
         this.token = token;
         this.userId = userId;
         this.createdAt = createdAt;
         this.lastAccessedAt = createdAt;
         this.timeoutMillis = timeoutMillis;
+        this.userType = UserType.normalize(userType);
     }
 
     /** 获取会话令牌。 */
@@ -63,6 +83,11 @@ public class Session {
     /** 获取空闲超时时间,单位毫秒。 */
     public long getTimeoutMillis() {
         return timeoutMillis;
+    }
+
+    /** 获取所属用户体系标识,永不为 null,见 {@link UserType}。 */
+    public String getUserType() {
+        return userType;
     }
 
     /**

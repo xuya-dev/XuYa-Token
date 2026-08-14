@@ -1,6 +1,7 @@
 package dev.xuya.token.demo.controller;
 
 import dev.xuya.token.core.auth.Authenticator;
+import dev.xuya.token.core.model.UserType;
 import dev.xuya.token.core.session.SessionManager;
 import dev.xuya.token.spring.boot.starter.LoginContext;
 import dev.xuya.token.spring.boot.starter.annotation.RequiresLogin;
@@ -53,6 +54,33 @@ public class AuthController {
     @PostMapping("/login")
     public Map<String, String> login(@RequestParam String username, @RequestParam String password) {
         return Map.of("token", authenticator.login(username, password).getToken());
+    }
+
+    /**
+     * C 端登录接口:手机号 + 短信验证码,签发 C 体系 token(前缀 C-)。
+     *
+     * @param phone 手机号
+     * @param code  短信验证码(演示固定 1234)
+     * @return 含 token 的响应
+     */
+    @PostMapping("/c/login")
+    public Map<String, String> cLogin(@RequestParam String phone, @RequestParam String code) {
+        return Map.of("token", authenticator.login(UserType.C, phone, code).getToken());
+    }
+
+    /**
+     * C 端当前用户接口:演示 C 体系 token 的鉴权与上下文。
+     *
+     * @return 用户 ID、用户名、角色列表、所属体系
+     */
+    @RequiresLogin
+    @GetMapping("/c/me")
+    public Map<String, Object> cMe() {
+        return Map.of(
+                "id", LoginContext.getUser().getId(),
+                "username", LoginContext.getUser().getUsername(),
+                "roles", LoginContext.getUser().getRoleCodes(),
+                "userType", LoginContext.getUser().getUserType());
     }
 
     /**

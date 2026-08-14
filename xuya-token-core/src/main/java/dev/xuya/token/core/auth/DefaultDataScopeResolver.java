@@ -44,16 +44,16 @@ public class DefaultDataScopeResolver implements DataScopeResolver {
         this.deptProvider = deptProvider;
     }
 
-    /** 解析用户有效数据权限:级别取全部角色(含继承)中最宽者,可见部门按级别展开。 */
+    /** 解析用户有效数据权限:级别取全部角色(含继承,按用户体系)中最宽者,可见部门按级别展开。 */
     @Override
     public DataScope resolve(UserInfo user) {
         if (user == null) {
             return null;
         }
-        Set<String> roleCodes = RoleExpander.expand(permissionLoader, user.getRoleCodes());
+        Set<String> roleCodes = RoleExpander.expand(user.getUserType(), permissionLoader, user.getRoleCodes());
         DataScopeType effective = DataScopeType.SELF;
         for (String code : roleCodes) {
-            Role role = permissionLoader.loadRole(code).orElse(null);
+            Role role = permissionLoader.loadRole(user.getUserType(), code).orElse(null);
             if (role != null && role.getDataScopeType().covers(effective)) {
                 effective = role.getDataScopeType();
             }

@@ -8,6 +8,18 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- 多体系(端)支持:体系为开放字符串标识(B/C/OPEN/MINI…数量不限),用户来源、会话空间、角色权限按体系隔离
+- `UserType` 开放标识工具(常量 + 合法性校验),非法/缺省体系归一化为默认 B 端
+- 会话按体系隔离:token 前缀标识体系(`B-xxx`/`C-xxx`),索引、并发限制、踢人(`invalidateByUserId(体系, 用户)`)按体系独立
+- 按体系策略覆盖:`xuya.token.user-types.{id}.timeout-millis / max-sessions-per-user`,未覆盖沿用全局
+- 体系路径隔离:`xuya.token.user-type-paths` 配置 Ant 模式,token 体系与路径不符返回 403
+- SPI 体系感知:`UserProvider`/`PermissionLoader`/`SessionManager`/`Authenticator` 新增体系维度默认方法,存量实现零破坏
+- 角色按体系隔离:`InMemoryPermissionLoader.addRole(体系, Role)` 注册体系专属角色,优先于共用角色,同名角色在不同体系可不同权限
+- Redis 会话体系化:索引键含体系(`user:{体系}:{userId}`),体系登记集合支持跨体系在线列表与全端踢人
+- JWT 会话体系化:typ 声明携带体系,旧令牌缺省归为 B 端
+- demo:C 端手机号登录(`/c/login`)、体系专属 member 角色、体系路径隔离示例
+
 ## [0.1.0] - 2026-08-14
 
 ### Added

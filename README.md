@@ -9,6 +9,7 @@
 ## 特性
 
 - **RBAC 模型**:用户 → 角色 → 权限(resource:action,支持 `*` 通配),角色支持继承
+- **多体系(端)**:开放体系标识(B/C/OPEN/MINI…不限数量),用户来源、会话、角色、超时策略按体系隔离
 - **数据权限**:SELF / DEPT / DEPT_AND_CHILD / ALL 四级行级过滤,`@RequiresDataScope` 注解 + `DataScopeContext`
 - **注解鉴权**:`@RequiresLogin` / `@RequiresRoles` / `@RequiresPermissions`
 - **SPI 可扩展**:`UserProvider`、`PermissionLoader`、`SessionManager` 均可替换为数据库/Redis 实现
@@ -78,6 +79,34 @@ xuya:
     jwt:
       secret: "change-me-at-least-32-bytes-long-secret"
 ```
+
+### 多体系(端)
+
+体系是开放字符串标识,数量不限。同一应用可同时承载 B 端管理后台与 C 端消费者应用(乃至开放平台、小程序):
+
+```java
+// C 端登录(手机号 + 验证码),签发 C- 前缀 token
+authenticator.login(UserType.C, phone, code);
+
+// B/C 端账号分表:覆写 UserProvider 的体系方法
+public UserInfo authenticate(String userType, String username, String password) { ... }
+
+// 体系专属角色:仅 C 端可见,优先于共用角色
+permissionLoader.addRole(UserType.C, Role.builder("member").permission("shop:discount").build());
+```
+
+```yaml
+xuya:
+  token:
+    user-types:            # 按体系覆盖策略,未覆盖沿用全局
+      c:
+        timeout-millis: 2592000000        # C 端 30 天
+    user-type-paths:       # 体系路径隔离:token 体系与路径不符 → 403
+      b: [/admin/**]
+      c: [/c/**]
+```
+
+踢人下线可按体系(`invalidateByUserId(UserType.C, userId)`)或跨全部体系执行。
 
 ### 数据权限
 

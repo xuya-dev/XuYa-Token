@@ -5,6 +5,7 @@ import dev.xuya.token.core.crypto.PasswordEncoder;
 import dev.xuya.token.core.model.DataScopeType;
 import dev.xuya.token.core.model.Role;
 import dev.xuya.token.core.model.UserInfo;
+import dev.xuya.token.core.model.UserType;
 import dev.xuya.token.core.spi.DeptProvider;
 import dev.xuya.token.core.spi.InMemoryPermissionLoader;
 import dev.xuya.token.core.spi.PermissionLoader;
@@ -34,7 +35,7 @@ public class DemoSecurityConfig {
         return passwordEncoder;
     }
 
-    /** 权限数据来源:内置管理员/普通用户/访客三个角色,含数据权限级别。 */
+    /** 权限数据来源:内置管理员/普通用户/访客三个角色,含数据权限级别;C 端注册体系专属 "member" 角色。 */
     @Bean
     public PermissionLoader permissionLoader() {
         return new InMemoryPermissionLoader()
@@ -43,7 +44,10 @@ public class DemoSecurityConfig {
                 .addRole(Role.builder("user").name("普通用户").permission("profile:read")
                         .dataScope(DataScopeType.DEPT).build())
                 .addRole(Role.builder("guest").name("访客")
-                        .dataScope(DataScopeType.SELF).build());
+                        .dataScope(DataScopeType.SELF).build())
+                // C 端专属角色:同名不影响 B 端,"member" 仅 C 体系可见
+                .addRole(UserType.C, Role.builder("member").name("会员")
+                        .permission("profile:read").dataScope(DataScopeType.SELF).build());
     }
 
     /** 部门层级:d2 下辖 d3,其余部门无子部门(DEPT_AND_CHILD 级别依赖)。 */
@@ -53,33 +57,46 @@ public class DemoSecurityConfig {
         return deptId -> children.getOrDefault(deptId, Set.of());
     }
 
-    /** 用户来源:内存用户表,密码在初始化时加密为 BCrypt 密文。 */
+    /** 用户来源:内存用户表,密码在初始化时加密为 BCrypt 密文;B/C 端账号分表,按体系分别校验。 */
     @Bean
     public UserProvider userProvider() {
         Map<String, UserInfo> users = new ConcurrentHashMap<>(Map.of(
-                "admin", new UserInfo("1", "admin", "d1", Set.of("admin"), Map.of()),
-                "alice", new UserInfo("2", "alice", "d2", Set.of("user"), Map.of()),
-                "carol", new UserInfo("3", "carol", "d3", Set.of("guest"), Map.of())));
+                "admin", new UserInfo("1", "admin", "d1", Set.of("admin"), Map.of(), UserType.B),
+                "alice", new UserInfo("2", "alice", "d2", Set.of("user"), Map.of(), UserType.B),
+                "carol", new UserInfo("3", "carol", "d3", Set.of("guest"), Map.of(), UserType.B),
+                // C 端用户:手机号登录,轻量角色
+                "13800000000", new UserInfo("c1", "bob", null, Set.of("member"), Map.of(), UserType.C)));
 
         // 演示用明文密码,启动时转为 BCrypt 密文;生产环境应直接从数据库读取密文
         Map<String, String> encodedPasswords = new ConcurrentHashMap<>(Map.of(
                 "admin", passwordEncoder.encode("admin123"),
                 "alice", passwordEncoder.encode("alice123"),
-                "carol", passwordEncoder.encode("carol123")));
+                "carol", passwordEncoder.encode("carol123"),
+                // C 端短信验证码(演示用固定码)
+                "13800000000", passwordEncoder.encode("1234")));
 
         return new UserProvider() {
             @Override
             public UserInfo authenticate(String username, String password) {
                 UserInfo user = users.get(username);
                 String encoded = encodedPasswords.get(username);
-                return user != null && encoded != null
+                return user != null && UserType.B.equals(user.getUserType()) && encoded != null
                         && passwordEncoder.matches(password, encoded) ? user : null;
             }
 
             @Override
-            public UserInfo findById(String userId) {
+            public UserInfo authenticate(String userType, String username, String password) {
+                UserInfo user = users.get(username);
+                String encoded = encodedPasswords.get(username);
+                return user != null && user.getUserType().equalsIgnoreCase(userType) && encoded != null
+                        && passwordEncoder.matches(password, encoded) ? user : null;
+            }
+
+            @Override
+            public UserInfo findById(String userType, String userId) {
                 return users.values().stream()
-                        .filter(u -> u.getId().equals(userId))
+                        .filter(u -> u.getId().equals(userId)
+                                && u.getUserType().equalsIgnoreCase(userType))
                         .findFirst().orElse(null);
             }
         };

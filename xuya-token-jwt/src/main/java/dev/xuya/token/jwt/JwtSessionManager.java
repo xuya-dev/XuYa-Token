@@ -1,5 +1,6 @@
 package dev.xuya.token.jwt;
 
+import dev.xuya.token.core.model.UserType;
 import dev.xuya.token.core.session.Session;
 import dev.xuya.token.core.session.SessionManager;
 import io.jsonwebtoken.Claims;
@@ -17,7 +18,8 @@ import java.util.Set;
  * 登录签发令牌、校验仅验签与验期,天然支持多节点水平扩展。
  *
  * <p><b>与有状态会话的取舍</b>:过期为签发时刻起的绝对时长
- * ({@code timeoutMillis} 进入 exp 声明,不支持空闲续期);
+ * ({@code timeoutMillis} 进入 exp 声明,不支持空闲续期);多体系经
+ * typ 声明携带(开放字符串,体系数量不限);
  * {@code invalidate} / {@code invalidateByUserId} / {@code listActiveTokens}
  * 为空实现 —— 无法服务端注销、无法踢人、无在线列表。
  * 需要这些能力时请使用内存或 Redis 会话模式。
@@ -49,20 +51,28 @@ public class JwtSessionManager implements SessionManager {
         this.timeoutMillis = timeoutMillis;
     }
 
-    /** 为用户签发 JWT(sub=用户 ID,iat=签发时间,exp=签发时间+绝对有效期)。 */
+    /** 为默认体系用户签发 JWT,委托给 {@link #create(String, String)}。 */
     @Override
     public Session create(String userId) {
+        return create(UserType.DEFAULT, userId);
+    }
+
+    /** 为指定体系用户签发 JWT(sub=用户 ID,typ=体系标识,iat=签发时间,exp=签发时间+绝对有效期)。 */
+    @Override
+    public Session create(String userType, String userId) {
+        String type = UserType.normalize(userType);
         Instant now = Instant.now();
         String token = Jwts.builder()
                 .subject(userId)
+                .claim("typ", type)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plusMillis(timeoutMillis)))
                 .signWith(key)
                 .compact();
-        return new Session(token, userId, now, timeoutMillis);
+        return new Session(token, userId, now, timeoutMillis, type);
     }
 
-    /** 验签并解析令牌;签名无效、已过期或格式非法返回 {@code null},会话剩余时长按 exp 声明推算。 */
+    /** 验签并解析令牌;签名无效、已过期或格式非法返回 {@code null},体系取自 typ 声明(缺失归为默认体系)。 */
     @Override
     public Session get(String token) {
         if (token == null || token.isEmpty()) {
@@ -75,8 +85,9 @@ public class JwtSessionManager implements SessionManager {
             if (remaining <= 0) {
                 return null;
             }
-            return new Session(token, claims.getSubject(),
-                    claims.getIssuedAt().toInstant(), remaining);
+            String userType = UserType.normalize(claims.get("typ", String.class));
+            return new Session(token, claims.getSubject(), claims.getIssuedAt().toInstant(),
+                    remaining, userType);
         } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
             return null;
         }

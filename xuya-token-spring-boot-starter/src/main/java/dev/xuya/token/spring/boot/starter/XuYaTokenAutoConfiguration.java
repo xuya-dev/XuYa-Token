@@ -23,6 +23,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
  * XuYa-Token 自动装配。所有 Bean 均为 {@code @ConditionalOnMissingBean},
  * 应用可覆盖任意部分(如 JDBC 版 {@code PermissionLoader})。
@@ -51,12 +54,16 @@ public class XuYaTokenAutoConfiguration {
         return new InMemoryPermissionLoader();
     }
 
-    /** 提供默认的会话管理器(内存实现,含并发会话限制),应用可自定义覆盖。 */
+    /** 提供默认的会话管理器(内存实现,含并发会话限制与按体系策略覆盖),应用可自定义覆盖。 */
     @Bean
     @ConditionalOnMissingBean
     public SessionManager sessionManager(XuYaTokenProperties properties) {
+        Map<String, dev.xuya.token.core.session.UserTypeSettings> settings = new LinkedHashMap<>();
+        properties.getUserTypes().forEach((type, props) -> settings.put(type,
+                new dev.xuya.token.core.session.UserTypeSettings(
+                        props.getTimeoutMillis(), props.getMaxSessionsPerUser())));
         return new InMemorySessionManager(properties.getTimeoutMillis(),
-                properties.getMaxSessionsPerUser(), properties.isEvictOldestOnExceed());
+                properties.getMaxSessionsPerUser(), properties.isEvictOldestOnExceed(), settings);
     }
 
     /** 提供默认的认证门面,应用可自定义覆盖。 */
