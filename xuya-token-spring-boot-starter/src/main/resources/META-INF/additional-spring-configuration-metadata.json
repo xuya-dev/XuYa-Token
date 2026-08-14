@@ -1,0 +1,59 @@
+{
+  "properties": [
+    {
+      "name": "xuya.token.header-name",
+      "type": "java.lang.String",
+      "description": "携带 token 的 HTTP 请求头名称.",
+      "defaultValue": "Authorization"
+    },
+    {
+      "name": "xuya.token.token-prefix",
+      "type": "java.lang.String",
+      "description": "需去除的 token 前缀,留空表示无前缀.",
+      "defaultValue": "Bearer "
+    },
+    {
+      "name": "xuya.token.timeout-millis",
+      "type": "java.lang.Long",
+      "description": "会话空闲超时时间,单位毫秒.",
+      "defaultValue": 1800000
+    },
+    {
+      "name": "xuya.token.exclude-paths",
+      "type": "java.util.List<java.lang.String>",
+      "description": "免认证路径白名单."
+    },
+    {
+      "name": "xuya.token.max-sessions-per-user",
+      "type": "java.lang.Integer",
+      "description": "单用户最大并发会话数,<=0 表示不限制.",
+      "defaultValue": 0
+    },
+    {
+      "name": "xuya.token.evict-oldest-on-exceed",
+      "type": "java.lang.Boolean",
+      "description": "超出并发上限时踢掉最旧会话(true)或拒绝新登录(false).",
+      "defaultValue": true
+    },
+    {
+      "name": "xuya.token.permission-cache-ttl-millis",
+      "type": "java.lang.Long",
+      "description": "权限缓存 TTL(毫秒),<=0 表示不缓存.",
+      "defaultValue": 0
+    },
+    {
+      "name": "xuya.token.jwt.secret",
+      "type": "java.lang.String",
+      "description": "JWT HS256 签名密钥,至少 32 字节;配置后启用无状态 JWT 会话(需引入 xuya-token-jwt)."
+    }
+  ],
+  "hints": [
+    {
+      "name": "xuya.token.exclude-paths",
+      "values": [
+        { "value": "/login", "description": "登录接口" },
+        { "value": "/error", "description": "错误页" }
+      ]
+    }
+  ]
+}

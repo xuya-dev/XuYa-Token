@@ -1,0 +1,24 @@
+server:
+  port: 8080
+
+xuya:
+  token:
+    header-name: Authorization
+    token-prefix: "Bearer "
+    timeout-millis: 1800000   # 30 minutes idle timeout
+    max-sessions-per-user: 2  # 顶替登录:同一用户最多 2 个并发会话,超出踢最旧
+    permission-cache-ttl-millis: 60000
+    exclude-paths:
+      - /login
+      - /error
+    # JWT 无状态模式示例(需引入 xuya-token-jwt 依赖;与 Redis 会话二选一):
+    # jwt:
+    #   secret: "change-me-at-least-32-bytes-long-secret"
+
+spring:
+  application:
+    name: xuya-token-demo
+
+logging:
+  level:
+    dev.xuya: debug

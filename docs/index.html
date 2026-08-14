@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XuYa-Token · 简易而企业级的 Java 权限框架</title>
+<meta name="description" content="XuYa-Token:基于 RBAC 的 Java 权限框架,注解鉴权、数据权限、多种会话模式,Spring Boot 3.x 开箱即用。">
+<style>
+  /* ============ 设计令牌:深色为默认,浅色经 [data-theme=light] 覆盖 ============ */
+  :root {
+    --bg: #0C1310;             /* 页面底:深青黑 */
+    --surface: #111B16;        /* 面 */
+    --surface-2: #16221C;      /* 面加深 */
+    --ink: #D8E5DE;            /* 主文字 */
+    --ink-2: #9DB1A7;          /* 次文字 */
+    --ink-3: #6C7F76;          /* 弱文字 */
+    --line: #22312A;
+    --accent: #3ECFA8;         /* 青·亮 */
+    --accent-deep: #7CE4C6;
+    --accent-dim: #12362C;
+    --amber: #D9B36A;          /* 琥珀:强调 */
+    --zhu: #F08A72;            /* 朱:错误/印章 */
+    --code-bg: #0A100D;
+    --code-line: #1B2A23;
+    --ok: #3ECFA8;   --ok-bg: #12362C;
+    --deny: #F08A72; --deny-bg: #3A211B;
+    --warn: #D9B36A; --warn-bg: #33290F;
+    --shadow: 0 12px 40px rgba(0,0,0,.45);
+    --sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --mono: "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+  }
+  [data-theme="light"] {
+    --bg: #F2F5F3;
+    --surface: #FFFFFF;
+    --surface-2: #E9EFEB;
+    --ink: #1C2721;
+    --ink-2: #4C5B54;
+    --ink-3: #7C8B83;
+    --line: #D6DFD9;
+    --accent: #0D7D62;
+    --accent-deep: #0A5C48;
+    --accent-dim: #DDF0E9;
+    --amber: #8A6A1F;
+    --zhu: #C24B31;
+    --code-bg: #101815;
+    --code-line: #243530;
+    --ok: #0D7D62;   --ok-bg: #DDF0E9;
+    --deny: #C24B31; --deny-bg: #F9E6E0;
+    --warn: #8A6A1F; --warn-bg: #F4ECD6;
+    --shadow: 0 12px 40px rgba(28,39,33,.12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+  body {
+    font-family: var(--sans); background: var(--bg); color: var(--ink);
+    line-height: 1.75; font-size: 15.5px;
+    transition: background .25s, color .25s;
+  }
+  ::selection { background: var(--accent-dim); }
+
+  /* ============ 布局 ============ */
+  .shell { display: grid; grid-template-columns: 264px 1fr; max-width: 1280px; margin: 0 auto; }
+  main { min-width: 0; padding: 0 52px 96px; }
+
+  /* ============ 侧栏:两种主题下均为深色控制台 ============ */
+  aside {
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: #0A100D; color: #C4D5CC;
+    padding: 28px 20px 40px 26px;
+    border-right: 1px solid #1B2A23;
+  }
+  .side-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .seal {
+    width: 34px; height: 34px; flex: none; border-radius: 8px;
+    background: var(--zhu); color: #FFF;
+    font-family: var(--mono); font-size: 16px; font-weight: 700;
+    display: grid; place-items: center;
+  }
+  .brand .name { font-family: var(--mono); font-weight: 700; font-size: 16px; color: #E4F0EA; letter-spacing: .5px; }
+  .theme-toggle {
+    background: #16221C; color: #9DB1A7; border: 1px solid #243530; border-radius: 8px;
+    font-family: var(--mono); font-size: 12px; padding: 5px 10px; cursor: pointer; line-height: 1.4;
+  }
+  .theme-toggle:hover { color: var(--accent); border-color: var(--accent); }
+  .theme-toggle:focus-visible, .role-btn:focus-visible, .copy-btn:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px;
+  }
+  .brand-meta { font-size: 12px; color: #6C7F76; margin: 4px 0 22px 44px; font-family: var(--mono); }
+  nav .group { margin-bottom: 18px; }
+  nav .group h3 {
+    font-family: var(--mono); font-size: 11px; font-weight: 600; color: #5B6E64;
+    letter-spacing: 2px; margin: 0 0 6px 12px;
+  }
+  nav a {
+    display: block; padding: 5px 12px; border-radius: 6px;
+    color: #9DB1A7; text-decoration: none; font-size: 13.5px;
+    border-left: 2px solid transparent;
+  }
+  nav a:hover { color: #E4F0EA; background: #131D17; }
+  nav a.active { color: var(--accent); background: #10251E; border-left-color: var(--accent); font-weight: 600; }
+  .side-foot { margin: 26px 0 0 12px; font-size: 12px; color: #5B6E64; line-height: 1.9; font-family: var(--mono); }
+  .side-foot .v { color: var(--amber); }
+
+  /* ============ 首屏 ============ */
+  .hero { padding: 68px 0 44px; border-bottom: 1px solid var(--line); }
+  .eyebrow {
+    font-family: var(--mono); font-size: 13px; color: var(--accent);
+    margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  h1 {
+    font-family: var(--mono); font-size: clamp(36px, 5.6vw, 52px);
+    font-weight: 700; letter-spacing: -.5px; line-height: 1.12;
+  }
+  h1 .tld { color: var(--accent); }
+  .thesis { max-width: 660px; margin: 18px 0 26px; font-size: 16.5px; color: var(--ink-2); }
+  .thesis b { color: var(--ink); font-weight: 600; }
+  .install { position: relative; max-width: 580px; }
+  .install pre { border: 1px solid var(--code-line); }
+  .copy-btn {
+    position: absolute; top: 10px; right: 10px;
+    background: rgba(255,255,255,.07); color: #9DB1A7;
+    border: 1px solid rgba(255,255,255,.15); border-radius: 6px;
+    font-size: 12px; padding: 3px 10px; cursor: pointer; font-family: var(--sans);
+  }
+  .copy-btn:hover { color: #E4F0EA; background: rgba(255,255,255,.14); }
+  .hero-stats { display: flex; gap: 40px; margin-top: 30px; flex-wrap: wrap; }
+  .hero-stats div { font-size: 12.5px; color: var(--ink-3); font-family: var(--mono); }
+  .hero-stats b { display: block; font-family: var(--mono); font-size: 22px; color: var(--ink); font-weight: 700; }
+  .hero-stats b em { font-style: normal; color: var(--accent); }
+
+  /* ============ 区块 ============ */
+  section { padding: 52px 0 8px; }
+  h2 {
+    font-family: var(--mono); font-size: 23px; font-weight: 700;
+    display: flex; align-items: center; gap: 12px; margin-bottom: 8px; letter-spacing: -.2px;
+  }
+  h2 .no { font-size: 13px; color: var(--accent); font-weight: 400; }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .lede { color: var(--ink-2); max-width: 680px; margin-bottom: 22px; }
+  h4 { font-size: 15px; margin: 24px 0 10px; color: var(--ink); }
+  p + p { margin-top: 10px; }
+
+  code {
+    font-family: var(--mono); font-size: 13px;
+    background: var(--accent-dim); color: var(--accent-deep);
+    padding: 1.5px 6px; border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg); color: #C9DCD3;
+    border: 1px solid var(--code-line);
+    padding: 18px 20px; border-radius: 10px; overflow-x: auto;
+    font-family: var(--mono); font-size: 13px; line-height: 1.7; margin: 12px 0 18px;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  .tok-k { color: #7FD4B4; }
+  .tok-s { color: #E2BC7E; }
+  .tok-c { color: #5C7268; font-style: italic; }
+  .tok-a { color: #EE9B84; }
+
+  /* ============ 鉴权日志控制台(签名元素) ============ */
+  .console {
+    border: 1px solid var(--code-line); border-radius: 12px; overflow: hidden;
+    background: var(--code-bg); box-shadow: var(--shadow);
+  }
+  .console-bar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; background: #101B15; border-bottom: 1px solid var(--code-line);
+  }
+  .console-bar .dots { display: flex; gap: 6px; }
+  .console-bar .dots i { width: 10px; height: 10px; border-radius: 50%; background: #2A3B33; }
+  .console-bar .dots i:first-child { background: #3A211B; }
+  .console-bar .dots i:nth-child(2) { background: #33290F; }
+  .console-bar .path {
+    flex: 1; text-align: center; font-family: var(--mono); font-size: 12px; color: #6C7F76;
+  }
+  .console-body { padding: 0; }
+  .roles {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 14px 18px; border-bottom: 1px solid var(--code-line);
+  }
+  .roles .lbl { font-family: var(--mono); font-size: 12px; color: #5C7268; margin-right: 4px; }
+  .role-btn {
+    font-family: var(--mono); font-size: 12.5px; padding: 5px 14px; cursor: pointer;
+    border: 1px solid #2A3B33; border-radius: 6px; background: #101B15; color: #9DB1A7;
+  }
+  .role-btn:hover { border-color: #3ECFA8; color: #C9DCD3; }
+  .role-btn[aria-pressed="true"] { background: #123529; border-color: var(--accent); color: var(--accent); font-weight: 700; }
+  .console table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th {
+    text-align: left; font-family: var(--mono); font-weight: 600; color: #5C7268; font-size: 11px;
+    letter-spacing: 2px; padding: 10px 18px; border-bottom: 1px solid var(--code-line);
+  }
+  td { padding: 9px 18px; border-bottom: 1px solid #16221B; vertical-align: middle; color: #C9DCD3; }
+  tr:last-child td { border-bottom: none; }
+  td.endpoint { font-family: var(--mono); font-size: 12.5px; }
+  td.endpoint .m { color: #7FD4B4; font-weight: 700; margin-right: 8px; }
+  td.req { font-family: var(--mono); font-size: 12px; color: #8FA79C; }
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px; font-weight: 700;
+    padding: 2px 10px; border-radius: 5px;
+  }
+  .chip.ok { color: var(--ok); background: var(--ok-bg); }
+  .chip.deny { color: var(--deny); background: var(--deny-bg); }
+  .chip.anon { color: var(--warn); background: var(--warn-bg); }
+  .console-out {
+    padding: 12px 18px; background: #101B15; border-top: 1px solid var(--code-line);
+    font-family: var(--mono); font-size: 12.5px; color: #8FA79C; line-height: 1.8;
+  }
+  .console-out b { color: var(--accent); font-weight: 700; }
+  .console-out::before { content: ">> "; color: #5C7268; }
+
+  /* ============ 组件 ============ */
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 16px 0 8px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 20px 22px; }
+  .card h5 { font-family: var(--mono); font-size: 14px; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; color: var(--ink); }
+  .card .tag { font-family: var(--mono); font-size: 10.5px; color: var(--accent); background: var(--accent-dim); border-radius: 4px; padding: 1px 7px; font-weight: 600; }
+  .card p { font-size: 13.5px; color: var(--ink-2); margin-top: 6px; }
+  .card ul { margin: 10px 0 0; padding-left: 0; list-style: none; font-size: 13px; color: var(--ink-2); font-family: var(--mono); }
+  .card li { padding: 3px 0 3px 20px; position: relative; }
+  .card li::before { content: "+"; position: absolute; left: 4px; color: var(--accent); font-weight: 700; }
+  .card li.off::before { content: "−"; color: var(--zhu); }
+  .card li.off { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--line); }
+
+  .lvl { display: flex; gap: 0; margin: 20px 0 8px; align-items: stretch; }
+  .lvl .step { flex: 1; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); position: relative; }
+  .lvl .step:first-child { border-radius: 10px 0 0 10px; }
+  .lvl .step:last-child { border-radius: 0 10px 10px 0; }
+  .lvl .step + .step { border-left: none; }
+  .lvl .step b { font-family: var(--mono); font-size: 12.5px; color: var(--accent-deep); }
+  .lvl .step span { display: block; font-size: 12.5px; color: var(--ink-2); }
+  .lvl .step i { position: absolute; right: 8px; top: 12px; color: var(--ink-3); font-style: normal; font-size: 11px; }
+  .lvl .step:nth-child(2) { background: var(--surface-2); }
+  .lvl .step:nth-child(3) { background: var(--accent-dim); }
+  .lvl .step:nth-child(4) b { color: var(--accent); }
+
+  table.ref { width: 100%; border-collapse: collapse; font-size: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .ref-wrap { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+  .ref-wrap table { border: none; border-radius: 0; }
+  table.ref th { padding: 10px 18px; border-bottom: 1px solid var(--line); background: var(--surface-2); color: var(--ink-3); font-family: var(--sans); font-size: 12.5px; letter-spacing: 1px; }
+  table.ref td { padding: 10px 18px; border-bottom: 1px solid var(--line); color: var(--ink); }
+  table.ref tr:last-child td { border-bottom: none; }
+  table.ref td:first-child { font-family: var(--mono); font-size: 13px; color: var(--accent-deep); white-space: nowrap; }
+  table.ref .def { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); }
+
+  .callout {
+    border-left: 3px solid var(--accent); background: var(--accent-dim);
+    border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 14px 0 18px;
+    font-size: 14px; color: var(--accent-deep);
+  }
+  [data-theme="dark"] .callout { color: var(--accent); }
+  .callout.warn { border-left-color: var(--zhu); background: var(--deny-bg); color: var(--zhu); }
+
+  footer {
+    margin-top: 72px; padding-top: 26px; border-top: 1px solid var(--line);
+    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    font-size: 13px; color: var(--ink-3);
+  }
+  footer .seal-sm {
+    display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px;
+    background: var(--zhu); color: #fff; font-family: var(--mono); font-size: 12px; vertical-align: -7px; margin-right: 7px;
+  }
+
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } body { transition: none; } }
+  @media (max-width: 960px) {
+    .shell { grid-template-columns: 1fr; }
+    aside { position: static; height: auto; border-right: none; border-bottom: 1px solid #1B2A23; }
+    main { padding: 0 22px 64px; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .lvl { flex-direction: column; }
+    .lvl .step { border-radius: 10px !important; border-left: 1px solid var(--line) !important; }
+    .lvl .step + .step { margin-top: -1px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ================= 侧栏(控制台风,双主题下恒深) ================= -->
+  <aside>
+    <div class="side-top">
+      <div class="brand"><span class="seal">XY</span><span class="name">xuya-token</span></div>
+      <button class="theme-toggle" id="theme-toggle" aria-label="切换深浅模式">浅色</button>
+    </div>
+    <p class="brand-meta">dev.xuya : 0.1.0</p>
+    <nav aria-label="文档目录">
+      <div class="group">
+        <h3>START</h3>
+        <a href="#hero" class="active">概览</a>
+        <a href="#matrix">鉴权演示</a>
+        <a href="#quickstart">快速开始</a>
+      </div>
+      <div class="group">
+        <h3>CORE</h3>
+        <a href="#annotations">鉴权注解</a>
+        <a href="#sessions">会话模式</a>
+        <a href="#datascope">数据权限</a>
+        <a href="#inherit">角色继承</a>
+      </div>
+      <div class="group">
+        <h3>INTEGRATE</h3>
+        <a href="#spi">扩展 SPI</a>
+        <a href="#config">配置参考</a>
+        <a href="#project">工程信息</a>
+      </div>
+    </nav>
+    <div class="side-foot">
+      v<span class="v">0.1.0</span><br>
+      Apache-2.0<br>
+      author 青衣
+    </div>
+  </aside>
+
+  <!-- ================= 正文 ================= -->
+  <main>
+
+    <header class="hero" id="hero">
+      <p class="eyebrow">dev.xuya / RBAC · 资源鉴权 · 数据权限</p>
+      <h1>xuya-token<span class="tld">.permission()</span></h1>
+      <p class="thesis">
+        简易而企业级的 Java 权限框架:<b>登录态、功能权限、数据权限</b>一次接入,
+        接口上贴一个注解即可完成鉴权。核心模块零 Spring 依赖,会话可运行于内存、Redis 或 JWT。
+      </p>
+      <div class="install">
+        <pre id="install-snippet"><button class="copy-btn" data-copy="install-snippet">复制</button><code>&lt;dependency&gt;
+  &lt;groupId&gt;dev.xuya&lt;/groupId&gt;
+  &lt;artifactId&gt;xuya-token-spring-boot-starter&lt;/artifactId&gt;
+  &lt;version&gt;0.1.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+      </div>
+      <div class="hero-stats">
+        <div><b>4<em>+</em>1</b>核心库 + 演示模块</div>
+        <div><b>64</b>单元 / 集成测试</div>
+        <div><b>Java <em>17</em></b>Spring Boot 3.x</div>
+        <div><b>0</b>核心 Spring 依赖</div>
+      </div>
+    </header>
+
+    <!-- ================= 鉴权演示(控制台) ================= -->
+    <section id="matrix">
+      <h2><span class="no">01</span>鉴权演示</h2>
+      <p class="lede">三个演示账号对应三种角色。切换身份,下方控制台实时输出每个接口的放行与拦截——这就是 XuYa-Token 在你的应用里做的事。</p>
+      <div class="console">
+        <div class="console-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="path">xuya-token ~ auth.log</span>
+        </div>
+        <div class="console-body">
+          <div class="roles" role="group" aria-label="切换演示身份">
+            <span class="lbl">$ whoami</span>
+            <button class="role-btn" data-role="admin" aria-pressed="true">admin · 管理员</button>
+            <button class="role-btn" data-role="alice" aria-pressed="false">alice · 普通用户</button>
+            <button class="role-btn" data-role="carol" aria-pressed="false">carol · 访客</button>
+          </div>
+          <table>
+            <thead><tr><th>REQUEST</th><th>REQUIREMENT</th><th>RESULT</th></tr></thead>
+            <tbody id="matrix-body"><!-- JS 注入 --></tbody>
+          </table>
+          <div class="console-out" id="scope-note"><!-- JS 注入 --></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 快速开始 ================= -->
+    <section id="quickstart">
+      <h2><span class="no">02</span>快速开始</h2>
+      <p class="lede">三步接入:引依赖、告诉框架用户从哪来、在接口上贴注解。权限数据默认内存实现,接入数据库只需实现一个接口。</p>
+
+      <h4>① 实现 UserProvider,告诉框架用户从哪来</h4>
+      <pre><code><span class="tok-a">@Bean</span>
+<span class="tok-k">public</span> UserProvider userProvider() {
+    <span class="tok-k">return new</span> UserProvider() {
+        <span class="tok-a">@Override</span>
+        <span class="tok-k">public</span> UserInfo authenticate(String username, String password) {
+            <span class="tok-c">// 校验凭证(推荐 BCrypt:passwordEncoder.matches(raw, encoded))</span>
+            <span class="tok-k">return</span> valid ? <span class="tok-k">new</span> UserInfo(<span class="tok-s">"1"</span>, <span class="tok-s">"alice"</span>, <span class="tok-s">"d2"</span>,
+                    Set.<span class="tok-k">of</span>(<span class="tok-s">"user"</span>), Map.<span class="tok-k">of</span>()) : <span class="tok-k">null</span>;
+        }
+    };
+}</code></pre>
+
+      <h4>② 配置 application.yml</h4>
+      <pre><code>xuya:
+  token:
+    header-name: Authorization
+    token-prefix: <span class="tok-s">"Bearer "</span>
+    timeout-millis: 1800000        <span class="tok-c"># 空闲 30 分钟</span>
+    max-sessions-per-user: 2       <span class="tok-c"># 超限顶替登录,踢最旧会话</span>
+    permission-cache-ttl-millis: 60000
+    exclude-paths: [/login, /error]</code></pre>
+
+      <h4>③ 在接口上贴注解</h4>
+      <pre><code><span class="tok-a">@RequiresLogin</span>
+<span class="tok-a">@GetMapping</span>(<span class="tok-s">"/me"</span>)
+<span class="tok-k">public</span> Map&lt;String, Object&gt; me() {
+    <span class="tok-k">return</span> Map.<span class="tok-k">of</span>(<span class="tok-s">"user"</span>, LoginContext.getUser().getUsername());
+}
+
+<span class="tok-a">@RequiresPermissions</span>(<span class="tok-s">"profile:delete"</span>)
+<span class="tok-a">@DeleteMapping</span>(<span class="tok-s">"/profiles/{id}"</span>)
+<span class="tok-k">public</span> ... <span class="tok-c">// 无权限自动返回 403 JSON:{code:403, message:...}</span></code></pre>
+
+      <div class="callout">登录调用 <code>authenticator.login(username, password)</code> 即获得 token;之后请求携带
+      <code>Authorization: Bearer {token}</code>,拦截器自动解析并绑定 <code>LoginContext</code>。</div>
+    </section>
+
+    <!-- ================= 鉴权注解 ================= -->
+    <section id="annotations">
+      <h2><span class="no">03</span>鉴权注解</h2>
+      <p class="lede">四个注解覆盖"能不能进"与"能看多少",支持方法级与类级,AOP 切面统一执行,失败自动映射 401 / 403。</p>
+      <div class="ref-wrap">
+      <table class="ref">
+        <thead><tr><th>注解</th><th>语义</th><th>示例</th></tr></thead>
+        <tbody>
+          <tr><td>@RequiresLogin</td><td>要求已登录,否则 401</td><td><code class="def">@RequiresLogin</code></td></tr>
+          <tr><td>@RequiresRoles</td><td>角色校验,ALL(默认)/ANY</td><td><code class="def">@RequiresRoles(value={"admin"}, logical=ANY)</code></td></tr>
+          <tr><td>@RequiresPermissions</td><td>权限校验,ANY(默认)/ALL,支持通配</td><td><code class="def">@RequiresPermissions("user:delete")</code></td></tr>
+          <tr><td>@RequiresDataScope</td><td>数据权限下限,通过后绑定上下文</td><td><code class="def">@RequiresDataScope(DataScopeType.DEPT)</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p style="margin-top:16px">权限表达式为 <code>资源:操作</code> 形式,<code>*</code> 通配:<code>user:*</code> 覆盖 user 资源全部操作,<code>*:*</code> 为超级权限。</p>
+    </section>
+
+    <!-- ================= 会话模式 ================= -->
+    <section id="sessions">
+      <h2><span class="no">04</span>会话模式</h2>
+      <p class="lede">同一套 <code>SessionManager</code> SPI,三种实现按需切换:单体应用零配置,集群引入 Redis 即共享,水平扩展选 JWT。</p>
+      <div class="grid-3">
+        <div class="card">
+          <h5>内存会话 <span class="tag">默认</span></h5>
+          <p>starter 内置,空闲超时自动过期,支持并发会话限制与踢人。</p>
+          <ul>
+            <li>零配置开箱即用</li>
+            <li>空闲续期 / 顶替登录</li>
+            <li class="off">跨节点共享</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h5>Redis 会话 <span class="tag">redis</span></h5>
+          <p>引入依赖即自动装配,多节点共享登录态,TTL 承载空闲超时。</p>
+          <ul>
+            <li>分布式部署共享会话</li>
+            <li>踢人 / 在线列表跨节点</li>
+            <li>enabled=false 可关闭</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h5>JWT 会话 <span class="tag">jwt</span></h5>
+          <p>配置 <code>xuya.token.jwt.secret</code>(≥32 字节)即启用,验签即校验。</p>
+          <ul>
+            <li>无状态,任意节点校验</li>
+            <li>绝对过期(写入 exp)</li>
+            <li class="off">服务端注销 / 踢人</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warn">注意:Redis 与 JWT 同时引入时请只启用其一,或直接自定义 <code>SessionManager</code> Bean 覆盖默认装配。</div>
+    </section>
+
+    <!-- ================= 数据权限 ================= -->
+    <section id="datascope">
+      <h2><span class="no">05</span>数据权限</h2>
+      <p class="lede">功能权限管"接口能不能调",数据权限管"数据能看几行"。角色配置级别,用户取全部角色(含继承)中最宽者。</p>
+      <div class="lvl" aria-label="数据权限级别">
+        <div class="step"><i>窄</i><b>SELF</b><span>仅本人数据</span></div>
+        <div class="step"><b>DEPT</b><span>本部门数据</span></div>
+        <div class="step"><b>DEPT_AND_CHILD</b><span>本部门及子部门</span></div>
+        <div class="step"><i>宽</i><b>ALL</b><span>全部数据</span></div>
+      </div>
+      <h4>角色配置级别</h4>
+      <pre><code>Role.builder(<span class="tok-s">"manager"</span>).name(<span class="tok-s">"经理"</span>)
+    .permission(<span class="tok-s">"report:*"</span>)
+    .dataScope(DataScopeType.DEPT_AND_CHILD)
+    .build();</code></pre>
+      <h4>接口声明下限,业务读取可见范围</h4>
+      <pre><code><span class="tok-a">@RequiresDataScope</span>(DataScopeType.DEPT)  <span class="tok-c">// 级别不足 → 403</span>
+<span class="tok-a">@GetMapping</span>(<span class="tok-s">"/orders"</span>)
+<span class="tok-k">public</span> ... {
+    DataScope scope = DataScopeContext.get();
+    scope.getVisibleDeptIds();  <span class="tok-c">// DEPT={本部门} / DEPT_AND_CHILD={本部门+子部门} / ALL、SELF 为空集</span>
+    <span class="tok-c">// 据此拼接 WHERE dept_id IN (...)</span>
+}</code></pre>
+      <div class="callout"><code>DEPT_AND_CHILD</code> 需要提供 <code>DeptProvider</code> Bean 返回部门后代;未提供时自动退化为本部门,不阻断启动。</div>
+    </section>
+
+    <!-- ================= 角色继承 ================= -->
+    <section id="inherit">
+      <h2><span class="no">06</span>角色继承</h2>
+      <p class="lede">子角色自动拥有父角色的身份、权限与数据权限,支持多级继承;环形配置自动防护,指向不存在的父角色会被安全忽略。</p>
+      <pre><code><span class="tok-c">// admin → manager → user:admin 同时拥有 manager 与 user 的一切</span>
+Role.builder(<span class="tok-s">"manager"</span>)
+    .permission(<span class="tok-s">"report:*"</span>)
+    .parent(<span class="tok-s">"user"</span>)          <span class="tok-c">// 继承 user 角色</span>
+    .build();</code></pre>
+      <p>继承展开由 <code>RoleExpander</code> 统一执行(BFS + 防环 + 20 跳上限),权限校验与数据权限解析共用,缓存装饰器同样兼容。</p>
+    </section>
+
+    <!-- ================= SPI ================= -->
+    <section id="spi">
+      <h2><span class="no">07</span>扩展 SPI</h2>
+      <p class="lede">框架只定义契约,数据从哪来由你决定。所有默认实现均带 <code>@ConditionalOnMissingBean</code>,自定义 Bean 直接覆盖。</p>
+      <div class="ref-wrap">
+      <table class="ref">
+        <thead><tr><th>接口</th><th>职责</th><th>默认实现</th></tr></thead>
+        <tbody>
+          <tr><td>UserProvider</td><td>用户来源与登录校验</td><td class="def">拒绝所有登录(必须自行实现)</td></tr>
+          <tr><td>PermissionLoader</td><td>角色 / 权限数据来源</td><td class="def">InMemoryPermissionLoader</td></tr>
+          <tr><td>CachedPermissionLoader</td><td>TTL 缓存装饰器(防穿透)</td><td class="def">按配置自动包装</td></tr>
+          <tr><td>SessionManager</td><td>会话存储 / 顶替 / 踢人</td><td class="def">InMemory · Redis · JWT</td></tr>
+          <tr><td>DeptProvider</td><td>部门层级(DEPT_AND_CHILD)</td><td class="def">无,缺失时退化本部门</td></tr>
+          <tr><td>PasswordEncoder</td><td>密码加密与校验</td><td class="def">BCryptPasswordEncoder</td></tr>
+          <tr><td>DataScopeResolver</td><td>数据权限解析</td><td class="def">DefaultDataScopeResolver</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- ================= 配置参考 ================= -->
+    <section id="config">
+      <h2><span class="no">08</span>配置参考</h2>
+      <p class="lede">全部配置位于 <code>xuya.token</code> 前缀之下,IDE 内有自动补全与说明(已附配置元数据)。</p>
+      <div class="ref-wrap">
+      <table class="ref">
+        <thead><tr><th>配置项</th><th>说明</th><th>默认值</th></tr></thead>
+        <tbody>
+          <tr><td>header-name</td><td>携带 token 的请求头</td><td class="def">Authorization</td></tr>
+          <tr><td>token-prefix</td><td>需去除的令牌前缀</td><td class="def">Bearer␠</td></tr>
+          <tr><td>timeout-millis</td><td>空闲超时 / JWT 绝对有效期</td><td class="def">1800000</td></tr>
+          <tr><td>exclude-paths</td><td>免认证路径白名单</td><td class="def">[/login, /error]</td></tr>
+          <tr><td>max-sessions-per-user</td><td>单用户并发会话上限,0 不限制</td><td class="def">0</td></tr>
+          <tr><td>evict-oldest-on-exceed</td><td>超限踢最旧(true)/ 拒绝新登录(false)</td><td class="def">true</td></tr>
+          <tr><td>permission-cache-ttl-millis</td><td>权限缓存 TTL,0 不缓存</td><td class="def">0</td></tr>
+          <tr><td>jwt.secret</td><td>JWT 密钥(≥32 字节),配置即启用 JWT</td><td class="def">—</td></tr>
+          <tr><td>redis.enabled</td><td>Redis 会话开关(引入 xuya-token-redis)</td><td class="def">true</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </section>
+
+    <!-- ================= 工程信息 ================= -->
+    <section id="project">
+      <h2><span class="no">09</span>工程信息</h2>
+      <div class="ref-wrap">
+      <table class="ref">
+        <thead><tr><th>模块</th><th>artifactId</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>核心</td><td>xuya-token-core</td><td>模型 / SPI / 异常 / 会话,零 Spring 依赖</td></tr>
+          <tr><td>装配</td><td>xuya-token-spring-boot-starter</td><td>拦截器 / 切面 / 异常处理 / 配置元数据</td></tr>
+          <tr><td>会话·Redis</td><td>xuya-token-redis</td><td>分布式会话,引入即生效</td></tr>
+          <tr><td>会话·JWT</td><td>xuya-token-jwt</td><td>无状态令牌,配置密钥即生效</td></tr>
+          <tr><td>演示</td><td>xuya-token-demo</td><td>登录 / 注解鉴权 / 数据权限全流程</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <h4>构建与测试</h4>
+      <pre><code>mvn clean verify          <span class="tok-c"># 构建 + 全部测试 + JaCoCo 覆盖率报告</span>
+mvn -Prelease package     <span class="tok-c"># 附加 sources / javadoc 附件(发布用)</span></code></pre>
+      <footer>
+        <span><span class="seal-sm">XY</span>xuya-token · Apache License 2.0 · 作者 青衣</span>
+        <span>Java 17+ · Spring Boot 3.x · 构建问题请提 GitHub Issues</span>
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // ============ 深浅模式:默认跟随系统,手动切换后记忆 ============
+  var THEME_KEY = "xuya-docs-theme";
+  var root = document.documentElement;
+  var toggle = document.getElementById("theme-toggle");
+  function applyTheme(t) {
+    root.setAttribute("data-theme", t);
+    toggle.textContent = t === "dark" ? "浅色" : "深色";
+  }
+  applyTheme(localStorage.getItem(THEME_KEY)
+    || (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  toggle.addEventListener("click", function () {
+    var next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  // ============ 鉴权演示数据(与 xuya-token-demo 一致) ============
+  var ENDPOINTS = [
+    { m: "POST", p: "/login",           req: "白名单 · 免认证",              r: { admin: "anon", alice: "anon", carol: "anon" } },
+    { m: "GET",  p: "/me",              req: "@RequiresLogin",               r: { admin: "ok",   alice: "ok",   carol: "ok"   } },
+    { m: "GET",  p: "/admin/dashboard", req: "@RequiresRoles(admin)",        r: { admin: "ok",   alice: "deny", carol: "deny" } },
+    { m: "GET",  p: "/profiles/{id}",   req: "profile:read",                 r: { admin: "ok",   alice: "ok",   carol: "deny" } },
+    { m: "DELETE", p: "/profiles/{id}", req: "profile:delete",               r: { admin: "ok",   alice: "deny", carol: "deny" } },
+    { m: "GET",  p: "/orders",          req: "@RequiresDataScope(DEPT)",     r: { admin: "ok",   alice: "ok",   carol: "deny" } }
+  ];
+  var SCOPES = {
+    admin: '<b>admin</b> · 角色 admin(继承全部)· 数据权限 <b>ALL</b> —— 订单接口可见全部 3 个部门数据。',
+    alice: '<b>alice</b> · 角色 user · 部门 d2 · 数据权限 <b>DEPT</b> —— 订单接口仅可见 d2 部门数据。',
+    carol: '<b>carol</b> · 角色 guest · 部门 d3 · 数据权限 <b>SELF</b> —— 低于订单接口要求的 DEPT,直接 403。'
+  };
+  var LABEL = { ok: ["200", "OK"], deny: ["403", "DENY"], anon: ["PASS", "ANON"] };
+
+  function renderMatrix(role) {
+    document.getElementById("matrix-body").innerHTML = ENDPOINTS.map(function (e) {
+      var s = e.r[role], lb = LABEL[s];
+      return '<tr><td class="endpoint"><span class="m">' + e.m + '</span>' + e.p +
+             '</td><td class="req">' + e.req +
+             '</td><td><span class="chip ' + s + '">' + lb[0] + ' ' + lb[1] + '</span></td></tr>';
+    }).join("");
+    document.getElementById("scope-note").innerHTML = SCOPES[role];
+  }
+  document.querySelectorAll(".role-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      document.querySelectorAll(".role-btn").forEach(function (b) { b.setAttribute("aria-pressed", "false"); });
+      btn.setAttribute("aria-pressed", "true");
+      renderMatrix(btn.dataset.role);
+    });
+  });
+  renderMatrix("admin");
+
+  // ============ 复制按钮 ============
+  document.querySelectorAll(".copy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var pre = document.getElementById(btn.dataset.copy);
+      navigator.clipboard.writeText(pre.innerText.replace(/^复制\n/, "")).then(function () {
+        btn.textContent = "已复制";
+        setTimeout(function () { btn.textContent = "复制"; }, 1600);
+      }).catch(function () { btn.textContent = "复制失败"; });
+    });
+  });
+
+  // ============ 侧栏滚动高亮 ============
+  var links = Array.prototype.slice.call(document.querySelectorAll("nav a"));
+  var map = {};
+  links.forEach(function (a) { map[a.getAttribute("href").slice(1)] = a; });
+  if ("IntersectionObserver" in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) {
+        if (en.isIntersecting) {
+          links.forEach(function (a) { a.classList.remove("active"); });
+          if (map[en.target.id]) {
+            map[en.target.id].classList.add("active");
+          }
+        }
+      });
+    }, { rootMargin: "-20% 0px -70% 0px" });
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+  }
+</script>
+</body>
+</html>
