@@ -12,7 +12,7 @@
 
 Please do NOT report security vulnerabilities through public GitHub Issues.
 
-- 邮箱 | Email: security@xuya.dev(示例,发布前替换为真实邮箱)
+- 邮箱 | Email: xuya_dev@qq.com
 - 请包含:影响版本、复现步骤/POC、影响评估
 - 我们将在 72 小时内确认收悉,修复后通过 CHANGELOG 与 GitHub Security Advisories 公告
 
