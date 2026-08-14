@@ -43,6 +43,13 @@ public class InMemorySessionManager implements SessionManager {
     /** 体系:用户 ID → 该用户当前 token 集合 的索引(支持踢人与在线列表)。 */
     private final Map<String, Set<String>> userTokens = new ConcurrentHashMap<>();
 
+    /** 自动清扫节流:每 N 次 create 触发一次 sweep,防惰性清理遗漏导致的泄漏。 */
+    private static final int SWEEP_EVERY_CREATES = 1024;
+
+    /** create 计数,用于自动清扫节流。 */
+    private final java.util.concurrent.atomic.AtomicInteger createCount =
+            new java.util.concurrent.atomic.AtomicInteger();
+
     /**
      * 构造内存会话管理器,全部体系沿用同一超时且不限并发会话数。
      *
@@ -109,7 +116,33 @@ public class InMemorySessionManager implements SessionManager {
             tokens.remove(token);
             throw new ForbiddenException("Concurrent login limit reached for user: " + userId);
         }
+        if (createCount.incrementAndGet() % SWEEP_EVERY_CREATES == 0) {
+            sweep();
+        }
         return session;
+    }
+
+    /**
+     * 主动清扫全部过期会话并清理空索引,返回清除的会话数。
+     * <p>过期会话通常在命中时被惰性清理,但永不再次访问的会话
+     * (用户关闭页面不再回来)只有靠周期清扫回收,长期运行的服务
+     * 应定期调用本方法(或依赖 create 节流触发的自动清扫)防止泄漏。
+     */
+    public int sweep() {
+        Instant now = Instant.now();
+        int removed = 0;
+        for (Session session : sessions.values()) {
+            if (session.isExpired(now) && sessions.remove(session.getToken()) != null) {
+                Set<String> tokens = userTokens.get(indexKey(session.getUserType(), session.getUserId()));
+                if (tokens != null) {
+                    tokens.remove(session.getToken());
+                }
+                removed++;
+            }
+        }
+        // 顺带清理空索引(避免 userTokens 膨胀)
+        userTokens.values().removeIf(Set::isEmpty);
+        return removed;
     }
 
     /** 按 token 解析会话;不存在或已超时返回 {@code null},命中时刷新活跃时间并顺带清理索引。 */

@@ -8,6 +8,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- 内存会话增加过期清扫:`sweep()` 主动回收未被再次访问的过期会话并清理空索引,create 每 1024 次自动触发,修复长期运行泄漏
+- 登录守卫计数表改为有界 LRU(默认 65536),遍历账号名的碰撞攻击不再撑爆内存
+- JWT 解析器改为构造器单例,消除每请求重复构建开销
+
+### Added
+- 用户缓存装饰器 `CachedUserProvider`:仅缓存 findById 鉴权热路径(authenticate 永远穿透),`user-cache-ttl-millis` 配置启用
+- 网页文档补齐 0.2.0 特性章节:数据权限 SQL/MyBatis 拦截器、安全与可观测(防爆破/审计/解释器)
+
 ## [0.2.0] - 2026-08-14
 
 ### Added

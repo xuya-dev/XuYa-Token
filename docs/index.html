@@ -285,7 +285,7 @@
       <div class="brand"><span class="seal">XY</span><span class="name">xuya-token</span></div>
       <button class="theme-toggle" id="theme-toggle" aria-label="切换深浅模式">浅色</button>
     </div>
-    <p class="brand-meta">dev.xuya : 0.2.0</p>
+    <p class="brand-meta">dev.xuya : 0.3.0-SNAPSHOT</p>
     <nav aria-label="文档目录">
       <div class="group">
         <h3>START</h3>
@@ -298,6 +298,7 @@
         <a href="#annotations">鉴权注解</a>
         <a href="#sessions">会话模式</a>
         <a href="#multi-type">多体系(端)</a>
+        <a href="#security">安全与可观测</a>
         <a href="#datascope">数据权限</a>
         <a href="#inherit">角色继承</a>
       </div>
@@ -309,7 +310,7 @@
       </div>
     </nav>
     <div class="side-foot">
-      v<span class="v">0.2.0</span><br>
+      v<span class="v">0.3.0-SNAPSHOT</span><br>
       Apache-2.0<br>
       author 青衣
     </div>
@@ -334,7 +335,7 @@
       </div>
       <div class="hero-stats">
         <div><b>5<em>+</em>1</b>核心库 + 演示模块</div>
-        <div><b>106</b>单元 / 集成测试</div>
+        <div><b>112</b>单元 / 集成测试</div>
         <div><b>Java <em>17</em></b>Spring Boot 3.x</div>
         <div><b>0</b>核心 Spring 依赖</div>
       </div>
@@ -547,11 +548,65 @@ permissionLoader.addRole(UserType.C,
     <span class="tok-c">// 据此拼接 WHERE dept_id IN (...)</span>
 }</code></pre>
       <div class="callout"><code>DEPT_AND_CHILD</code> 需要提供 <code>DeptProvider</code> Bean 返回部门后代;未提供时自动退化为本部门,不阻断启动。</div>
+
+      <h4>SQL 条件生成器:可见范围 → WHERE 片段</h4>
+      <pre><code><span class="tok-k">var</span> c = DataScopeSql.of(DataScopeContext.get())
+        .deptColumn(<span class="tok-s">"dept_id"</span>).userColumn(<span class="tok-s">"create_by"</span>).build();
+c.getSql();    <span class="tok-c">// "dept_id IN (?, ?)"</span>
+c.getParams(); <span class="tok-c">// ["d2", "d3"]</span>
+<span class="tok-c">// ALL → 1=1;SELF → create_by = ?;可见范围为空 → 1=0(安全侧失败)</span></code></pre>
+
+      <h4>MyBatis-Plus 自动拦截(xuya-token-mybatis,Mapper 零侵入)</h4>
+      <pre><code><span class="tok-c">// 注册拦截器</span>
+MybatisPlusInterceptor interceptor = <span class="tok-k">new</span> MybatisPlusInterceptor();
+interceptor.addInnerInterceptor(<span class="tok-k">new</span> DataScopeInterceptor());
+
+<span class="tok-c">// Mapper 方法标注即生效:执行时自动追加可见范围条件</span>
+<span class="tok-a">@DataScopeFilter</span>(alias = <span class="tok-s">"o"</span>, deptColumn = <span class="tok-s">"org_id"</span>)
+<span class="tok-a">@Select</span>(<span class="tok-s">"SELECT * FROM orders o WHERE o.status = #{status}"</span>)
+List&lt;Order&gt; selectByStatus(String status);
+<span class="tok-c">// 实际执行:... WHERE (o.status = ?) AND o.org_id IN (#{xuyaP0})</span></code></pre>
+    </section>
+
+    <!-- ================= 安全与可观测 ================= -->
+    <section id="security">
+      <h2><span class="no">07</span>安全与可观测</h2>
+      <p class="lede">登录链路的纵深防御与可解释性:防爆破锁定、审计事件、鉴权决策解释,让权限系统"看得见、查得动"。</p>
+
+      <h4>登录防爆破</h4>
+      <pre><code>xuya:
+  token:
+    guard-max-failures: 5      <span class="tok-c"># 连续失败 5 次锁定,0 = 不启用</span>
+    guard-lock-millis: 300000  <span class="tok-c"># 锁定 5 分钟(锁定期 403)</span></code></pre>
+      <p>按"体系:账号"计数,成功即清零;计数表为有界 LRU,遍历账号名的碰撞攻击不会撑爆内存。</p>
+
+      <h4>审计事件(SPI 回调,异常不阻断认证)</h4>
+      <pre><code><span class="tok-a">@Bean</span>
+<span class="tok-k">public</span> AuthAuditListener auditListener() {
+    <span class="tok-k">return new</span> AuthAuditListener() {
+        <span class="tok-a">@Override</span>
+        <span class="tok-k">public void</span> onLoginFailure(String userType, String username) {
+            log.warn(<span class="tok-s">"[审计] 登录失败 user={} username={}"</span>, userType, username);
+        }
+        <span class="tok-c">// onLoginSuccess / onLogout 同理,可落库或对接告警</span>
+    };
+}</code></pre>
+
+      <h4>鉴权可解释:解释任意判定,输出"为什么"</h4>
+      <pre><code><span class="tok-c">// 配置 xuya.token.explain-enabled=true 后,登录态访问调试端点:</span>
+GET /xuya/auth/explain?expr=profile:delete
+
+<span class="tok-c">// 返回:</span>
+{ <span class="tok-s">"allowed"</span>: false,
+  <span class="tok-s">"reason"</span>: <span class="tok-s">"拒绝:已授予权限 [profile:read],无一蕴含 profile:delete"</span>,
+  <span class="tok-s">"roles"</span>: [{ <span class="tok-s">"code"</span>: <span class="tok-s">"user"</span>, <span class="tok-s">"direct"</span>: true, ... }],
+  <span class="tok-s">"dataScope"</span>: { <span class="tok-s">"type"</span>: <span class="tok-s">"DEPT"</span>, <span class="tok-s">"visibleDeptIds"</span>: [<span class="tok-s">"d2"</span>] } }</code></pre>
+      <div class="callout">表达式含冒号按权限解释,否则按角色编码解释;角色轨迹会标注直接持有还是继承自哪个父角色。仅调试场景开启。</div>
     </section>
 
     <!-- ================= 角色继承 ================= -->
     <section id="inherit">
-      <h2><span class="no">07</span>角色继承</h2>
+      <h2><span class="no">08</span>角色继承</h2>
       <p class="lede">子角色自动拥有父角色的身份、权限与数据权限,支持多级继承;环形配置自动防护,指向不存在的父角色会被安全忽略。</p>
       <pre><code><span class="tok-c">// admin → manager → user:admin 同时拥有 manager 与 user 的一切</span>
 Role.builder(<span class="tok-s">"manager"</span>)
@@ -563,7 +618,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= SPI ================= -->
     <section id="spi">
-      <h2><span class="no">08</span>扩展 SPI</h2>
+      <h2><span class="no">09</span>扩展 SPI</h2>
       <p class="lede">框架只定义契约,数据从哪来由你决定。所有默认实现均带 <code>@ConditionalOnMissingBean</code>,自定义 Bean 直接覆盖。</p>
       <div class="ref-wrap">
       <table class="ref">
@@ -583,7 +638,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= 配置参考 ================= -->
     <section id="config">
-      <h2><span class="no">09</span>配置参考</h2>
+      <h2><span class="no">10</span>配置参考</h2>
       <p class="lede">全部配置位于 <code>xuya.token</code> 前缀之下,IDE 内有自动补全与说明(已附配置元数据)。</p>
       <div class="ref-wrap">
       <table class="ref">
@@ -600,6 +655,10 @@ Role.builder(<span class="tok-s">"manager"</span>)
           <tr><td>redis.enabled</td><td>Redis 会话开关(引入 xuya-token-redis)</td><td class="def">true</td></tr>
           <tr><td>user-types.*.timeout-millis</td><td>按体系覆盖空闲超时,未覆盖沿用全局</td><td class="def">—</td></tr>
           <tr><td>user-types.*.max-sessions-per-user</td><td>按体系覆盖并发会话上限</td><td class="def">—</td></tr>
+          <tr><td>guard-max-failures</td><td>登录防爆破:连续失败锁定阈值,0 不启用</td><td class="def">0</td></tr>
+          <tr><td>guard-lock-millis</td><td>登录防爆破:锁定时长(毫秒)</td><td class="def">300000</td></tr>
+          <tr><td>explain-enabled</td><td>鉴权解释调试端点开关(需登录)</td><td class="def">false</td></tr>
+          <tr><td>user-cache-ttl-millis</td><td>用户缓存 TTL(仅缓存 findById 热路径),0 不缓存</td><td class="def">0</td></tr>
           <tr><td>user-type-paths</td><td>体系路径归属(Ant 模式),token 体系不符 → 403</td><td class="def">—</td></tr>
         </tbody>
       </table>
@@ -608,7 +667,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= 工程信息 ================= -->
     <section id="project">
-      <h2><span class="no">10</span>工程信息</h2>
+      <h2><span class="no">11</span>工程信息</h2>
       <div class="ref-wrap">
       <table class="ref">
         <thead><tr><th>模块</th><th>artifactId</th><th>说明</th></tr></thead>
@@ -616,6 +675,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
           <tr><td>核心</td><td>xuya-token-core</td><td>模型 / SPI / 异常 / 会话,零 Spring 依赖</td></tr>
           <tr><td>装配</td><td>xuya-token-spring-boot-starter</td><td>拦截器 / 切面 / 异常处理 / 配置元数据</td></tr>
           <tr><td>会话·Redis</td><td>xuya-token-redis</td><td>分布式会话,引入即生效</td></tr>
+          <tr><td>数据·MyBatis</td><td>xuya-token-mybatis</td><td>数据权限 SQL 拦截器,注解即生效</td></tr>
           <tr><td>会话·JWT</td><td>xuya-token-jwt</td><td>无状态令牌,配置密钥即生效</td></tr>
           <tr><td>演示</td><td>xuya-token-demo</td><td>登录 / 注解鉴权 / 数据权限全流程</td></tr>
         </tbody>

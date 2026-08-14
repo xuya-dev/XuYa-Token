@@ -31,6 +31,9 @@ public class JwtSessionManager implements SessionManager {
     /** HS256 签名密钥。 */
     private final SecretKey key;
 
+    /** 预构建的解析器(线程安全,避免每请求重复构建)。 */
+    private final io.jsonwebtoken.JwtParser parser;
+
     /** 令牌绝对有效期,单位毫秒(写入 exp 声明)。 */
     private final long timeoutMillis;
 
@@ -48,6 +51,7 @@ public class JwtSessionManager implements SessionManager {
                     "JWT secret must be at least 32 bytes for HS256, got: " + bytes.length);
         }
         this.key = Keys.hmacShaKeyFor(bytes);
+        this.parser = Jwts.parser().verifyWith(key).build();
         this.timeoutMillis = timeoutMillis;
     }
 
@@ -79,8 +83,7 @@ public class JwtSessionManager implements SessionManager {
             return null;
         }
         try {
-            Claims claims = Jwts.parser().verifyWith(key).build()
-                    .parseSignedClaims(token).getPayload();
+            Claims claims = parser.parseSignedClaims(token).getPayload();
             long remaining = claims.getExpiration().getTime() - System.currentTimeMillis();
             if (remaining <= 0) {
                 return null;

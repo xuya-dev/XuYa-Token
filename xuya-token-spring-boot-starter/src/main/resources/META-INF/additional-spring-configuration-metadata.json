@@ -79,6 +79,12 @@
       "type": "java.lang.Long",
       "description": "登录防爆破:锁定时长(毫秒).",
       "defaultValue": 300000
+    },
+    {
+      "name": "xuya.token.user-cache-ttl-millis",
+      "type": "java.lang.Long",
+      "description": "用户缓存 TTL(毫秒),仅缓存 findById 鉴权热路径,<=0 不缓存.",
+      "defaultValue": 0
     }
   ],
   "hints": [

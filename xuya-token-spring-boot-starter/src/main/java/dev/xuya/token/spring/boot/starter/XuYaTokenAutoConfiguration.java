@@ -14,6 +14,7 @@ import dev.xuya.token.core.explain.PermissionExplainer;
 import dev.xuya.token.core.session.InMemorySessionManager;
 import dev.xuya.token.core.session.SessionManager;
 import dev.xuya.token.core.spi.CachedPermissionLoader;
+import dev.xuya.token.core.spi.CachedUserProvider;
 import dev.xuya.token.core.spi.DeptProvider;
 import dev.xuya.token.core.spi.InMemoryPermissionLoader;
 import dev.xuya.token.core.spi.PermissionLoader;
@@ -88,7 +89,11 @@ public class XuYaTokenAutoConfiguration {
             guard = new InMemoryLoginGuard(properties.getGuardMaxFailures(),
                     properties.getGuardLockMillis());
         }
-        return new DefaultAuthenticator(userProvider, sessionManager, guard,
+        // 配置了用户缓存 TTL 时以缓存装饰器包装用户来源(仅缓存 findById 热路径)
+        UserProvider effectiveProvider = properties.getUserCacheTtlMillis() > 0
+                ? new CachedUserProvider(userProvider, properties.getUserCacheTtlMillis())
+                : userProvider;
+        return new DefaultAuthenticator(effectiveProvider, sessionManager, guard,
                 auditListeners.orderedStream().toList());
     }
 

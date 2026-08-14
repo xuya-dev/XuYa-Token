@@ -45,6 +45,9 @@ public class XuYaTokenProperties {
     /** 登录防爆破:锁定时长(毫秒),默认 5 分钟。 */
     private long guardLockMillis = 300_000L;
 
+    /** 用户缓存 TTL(毫秒),<=0 表示不缓存;缓存 findById 减轻每请求用户查询。 */
+    private long userCacheTtlMillis = 0;
+
     /** 按体系的策略覆盖(键为体系标识,如 b / c / open),未覆盖的体系沿用全局配置。 */
     private final Map<String, UserTypeProperties> userTypes = new LinkedHashMap<>();
 
@@ -162,6 +165,16 @@ public class XuYaTokenProperties {
     /** 设置防爆破锁定时长(毫秒)。 */
     public void setGuardLockMillis(long guardLockMillis) {
         this.guardLockMillis = guardLockMillis;
+    }
+
+    /** 获取用户缓存 TTL(毫秒)。 */
+    public long getUserCacheTtlMillis() {
+        return userCacheTtlMillis;
+    }
+
+    /** 设置用户缓存 TTL(毫秒),<=0 不缓存。 */
+    public void setUserCacheTtlMillis(long userCacheTtlMillis) {
+        this.userCacheTtlMillis = userCacheTtlMillis;
     }
 
     /** 单个体系的策略覆盖,未设置(null)的项继承全局配置。 */
