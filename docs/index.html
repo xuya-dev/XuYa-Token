@@ -285,7 +285,7 @@
       <div class="brand"><span class="seal">XY</span><span class="name">xuya-token</span></div>
       <button class="theme-toggle" id="theme-toggle" aria-label="切换深浅模式">浅色</button>
     </div>
-    <p class="brand-meta">dev.xuya : 0.1.0</p>
+    <p class="brand-meta">dev.xuya : 0.2.0-SNAPSHOT</p>
     <nav aria-label="文档目录">
       <div class="group">
         <h3>START</h3>
@@ -297,6 +297,7 @@
         <h3>CORE</h3>
         <a href="#annotations">鉴权注解</a>
         <a href="#sessions">会话模式</a>
+        <a href="#multi-type">多体系(端)</a>
         <a href="#datascope">数据权限</a>
         <a href="#inherit">角色继承</a>
       </div>
@@ -308,7 +309,7 @@
       </div>
     </nav>
     <div class="side-foot">
-      v<span class="v">0.1.0</span><br>
+      v<span class="v">0.2.0-SNAPSHOT</span><br>
       Apache-2.0<br>
       author 青衣
     </div>
@@ -325,7 +326,8 @@
         接口上贴一个注解即可完成鉴权。核心模块零 Spring 依赖,会话可运行于内存、Redis 或 JWT。
       </p>
       <div class="install">
-        <pre id="install-snippet"><button class="copy-btn" data-copy="install-snippet">复制</button><code>&lt;dependency&gt;
+        <pre id="install-snippet"><button class="copy-btn" data-copy="install-snippet">复制</button><code>&lt;!-- 最新发布版 0.1.0;多体系等新特性在 0.2.0-SNAPSHOT --&gt;
+&lt;dependency&gt;
   &lt;groupId&gt;dev.xuya&lt;/groupId&gt;
   &lt;artifactId&gt;xuya-token-spring-boot-starter&lt;/artifactId&gt;
   &lt;version&gt;0.1.0&lt;/version&gt;
@@ -333,7 +335,7 @@
       </div>
       <div class="hero-stats">
         <div><b>4<em>+</em>1</b>核心库 + 演示模块</div>
-        <div><b>64</b>单元 / 集成测试</div>
+        <div><b>80</b>单元 / 集成测试</div>
         <div><b>Java <em>17</em></b>Spring Boot 3.x</div>
         <div><b>0</b>核心 Spring 依赖</div>
       </div>
@@ -354,6 +356,7 @@
             <button class="role-btn" data-role="admin" aria-pressed="true">admin · 管理员</button>
             <button class="role-btn" data-role="alice" aria-pressed="false">alice · 普通用户</button>
             <button class="role-btn" data-role="carol" aria-pressed="false">carol · 访客</button>
+            <button class="role-btn" data-role="bob" aria-pressed="false">bob · C 端会员</button>
           </div>
           <table>
             <thead><tr><th>REQUEST</th><th>REQUIREMENT</th><th>RESULT</th></tr></thead>
@@ -436,6 +439,7 @@
           <ul>
             <li>零配置开箱即用</li>
             <li>空闲续期 / 顶替登录</li>
+            <li>user-types 按体系覆盖策略</li>
             <li class="off">跨节点共享</li>
           </ul>
         </div>
@@ -461,9 +465,68 @@
       <div class="callout warn">注意:Redis 与 JWT 同时引入时请只启用其一,或直接自定义 <code>SessionManager</code> Bean 覆盖默认装配。</div>
     </section>
 
+    <!-- ================= 多体系(端) ================= -->
+    <section id="multi-type">
+      <h2><span class="no">05</span>多体系(端)</h2>
+      <p class="lede">体系是<b>开放字符串标识</b>,数量不限 —— "B"、"C" 只是预置的两个常用值,
+      开放平台 "OPEN"、小程序 "MINI"、IoT 等任意自定义体系直接可用,无需改动框架。
+      同一应用可同时承载管理后台与消费者端,五层维度全部隔离。</p>
+
+      <div class="ref-wrap">
+      <table class="ref">
+        <thead><tr><th>隔离层</th><th>机制</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>登录</td><td>体系维度登录 + 用户分表</td><td><code class="def">authenticator.login("C", phone, code)</code>,UserProvider 按体系分别校验</td></tr>
+          <tr><td>会话</td><td>token 前缀标识体系</td><td>形如 <code class="def">B-xxx / C-xxx / OPEN-xxx</code>,索引与并发限制按体系独立</td></tr>
+          <tr><td>策略</td><td>按体系覆盖全局配置</td><td>C 端 30 天免登录、B 端 30 分钟,互不影响</td></tr>
+          <tr><td>角色</td><td>体系专属角色优先于共用角色</td><td>同名 "member" 在 B/C 端可拥有不同权限</td></tr>
+          <tr><td>路径</td><td>Ant 模式路径体系拦截</td><td>token 体系与路径归属不符直接 403,即使拥有足够角色</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <h4>C 端登录与账号分表</h4>
+      <pre><code><span class="tok-c">// C 端登录:手机号 + 短信验证码,签发 C- 前缀 token</span>
+authenticator.login(UserType.C, phone, smsCode);
+
+<span class="tok-a">@Bean</span>
+<span class="tok-k">public</span> UserProvider userProvider() {
+    <span class="tok-k">return new</span> UserProvider() {
+        <span class="tok-a">@Override</span>
+        <span class="tok-k">public</span> UserInfo authenticate(String userType, String username, String password) {
+            <span class="tok-k">return</span> <span class="tok-s">"C"</span>.equalsIgnoreCase(userType)
+                    ? cUserMapper.verifyPhone(username, password)   <span class="tok-c">// C 端用户表</span>
+                    : bUserMapper.verifyAccount(username, password); <span class="tok-c">// B 端用户表</span>
+        }
+    };
+}</code></pre>
+
+      <h4>体系专属角色(共用角色照常工作)</h4>
+      <pre><code><span class="tok-c">// "member" 仅 C 体系可见,优先于同名共用角色;B 端同名角色互不干扰</span>
+permissionLoader.addRole(UserType.C,
+        Role.builder(<span class="tok-s">"member"</span>).permission(<span class="tok-s">"shop:discount"</span>).build());</code></pre>
+
+      <h4>按体系覆盖策略 + 路径体系隔离</h4>
+      <pre><code>xuya:
+  token:
+    user-types:                 <span class="tok-c"># 按体系覆盖,未覆盖沿用全局</span>
+      c:
+        timeout-millis: 2592000000      <span class="tok-c"># C 端 30 天</span>
+        max-sessions-per-user: 5
+      open:
+        timeout-millis: 3600000         <span class="tok-c"># 开放平台 1 小时</span>
+    user-type-paths:            <span class="tok-c"># 路径体系归属,Ant 模式</span>
+      b: [/admin/**, /profiles/**]
+      c: [/c/**]
+      open: [/open/api/**]</code></pre>
+
+      <div class="callout">踢人下线按体系粒度控制:<code>invalidateByUserId("C", userId)</code> 仅踢 C 端,
+      <code>invalidateByUserId(userId)</code> 跨全部体系;在线列表 <code>listActiveTokens</code> 返回用户在各体系的全部有效 token。</div>
+    </section>
+
     <!-- ================= 数据权限 ================= -->
     <section id="datascope">
-      <h2><span class="no">05</span>数据权限</h2>
+      <h2><span class="no">06</span>数据权限</h2>
       <p class="lede">功能权限管"接口能不能调",数据权限管"数据能看几行"。角色配置级别,用户取全部角色(含继承)中最宽者。</p>
       <div class="lvl" aria-label="数据权限级别">
         <div class="step"><i>窄</i><b>SELF</b><span>仅本人数据</span></div>
@@ -489,7 +552,7 @@
 
     <!-- ================= 角色继承 ================= -->
     <section id="inherit">
-      <h2><span class="no">06</span>角色继承</h2>
+      <h2><span class="no">07</span>角色继承</h2>
       <p class="lede">子角色自动拥有父角色的身份、权限与数据权限,支持多级继承;环形配置自动防护,指向不存在的父角色会被安全忽略。</p>
       <pre><code><span class="tok-c">// admin → manager → user:admin 同时拥有 manager 与 user 的一切</span>
 Role.builder(<span class="tok-s">"manager"</span>)
@@ -501,7 +564,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= SPI ================= -->
     <section id="spi">
-      <h2><span class="no">07</span>扩展 SPI</h2>
+      <h2><span class="no">08</span>扩展 SPI</h2>
       <p class="lede">框架只定义契约,数据从哪来由你决定。所有默认实现均带 <code>@ConditionalOnMissingBean</code>,自定义 Bean 直接覆盖。</p>
       <div class="ref-wrap">
       <table class="ref">
@@ -521,7 +584,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= 配置参考 ================= -->
     <section id="config">
-      <h2><span class="no">08</span>配置参考</h2>
+      <h2><span class="no">09</span>配置参考</h2>
       <p class="lede">全部配置位于 <code>xuya.token</code> 前缀之下,IDE 内有自动补全与说明(已附配置元数据)。</p>
       <div class="ref-wrap">
       <table class="ref">
@@ -536,6 +599,9 @@ Role.builder(<span class="tok-s">"manager"</span>)
           <tr><td>permission-cache-ttl-millis</td><td>权限缓存 TTL,0 不缓存</td><td class="def">0</td></tr>
           <tr><td>jwt.secret</td><td>JWT 密钥(≥32 字节),配置即启用 JWT</td><td class="def">—</td></tr>
           <tr><td>redis.enabled</td><td>Redis 会话开关(引入 xuya-token-redis)</td><td class="def">true</td></tr>
+          <tr><td>user-types.*.timeout-millis</td><td>按体系覆盖空闲超时,未覆盖沿用全局</td><td class="def">—</td></tr>
+          <tr><td>user-types.*.max-sessions-per-user</td><td>按体系覆盖并发会话上限</td><td class="def">—</td></tr>
+          <tr><td>user-type-paths</td><td>体系路径归属(Ant 模式),token 体系不符 → 403</td><td class="def">—</td></tr>
         </tbody>
       </table>
       </div>
@@ -543,7 +609,7 @@ Role.builder(<span class="tok-s">"manager"</span>)
 
     <!-- ================= 工程信息 ================= -->
     <section id="project">
-      <h2><span class="no">09</span>工程信息</h2>
+      <h2><span class="no">10</span>工程信息</h2>
       <div class="ref-wrap">
       <table class="ref">
         <thead><tr><th>模块</th><th>artifactId</th><th>说明</th></tr></thead>
@@ -587,17 +653,20 @@ mvn -Prelease package     <span class="tok-c"># 附加 sources / javadoc 附件(
 
   // ============ 鉴权演示数据(与 xuya-token-demo 一致) ============
   var ENDPOINTS = [
-    { m: "POST", p: "/login",           req: "白名单 · 免认证",              r: { admin: "anon", alice: "anon", carol: "anon" } },
-    { m: "GET",  p: "/me",              req: "@RequiresLogin",               r: { admin: "ok",   alice: "ok",   carol: "ok"   } },
-    { m: "GET",  p: "/admin/dashboard", req: "@RequiresRoles(admin)",        r: { admin: "ok",   alice: "deny", carol: "deny" } },
-    { m: "GET",  p: "/profiles/{id}",   req: "profile:read",                 r: { admin: "ok",   alice: "ok",   carol: "deny" } },
-    { m: "DELETE", p: "/profiles/{id}", req: "profile:delete",               r: { admin: "ok",   alice: "deny", carol: "deny" } },
-    { m: "GET",  p: "/orders",          req: "@RequiresDataScope(DEPT)",     r: { admin: "ok",   alice: "ok",   carol: "deny" } }
+    { m: "POST", p: "/login",           req: "白名单 · 免认证",              r: { admin: "anon", alice: "anon", carol: "anon", bob: "anon" } },
+    { m: "GET",  p: "/me",              req: "@RequiresLogin",               r: { admin: "ok",   alice: "ok",   carol: "ok",   bob: "ok"   } },
+    { m: "GET",  p: "/admin/dashboard", req: "@RequiresRoles(admin)",        r: { admin: "ok",   alice: "deny", carol: "deny", bob: "deny" } },
+    { m: "GET",  p: "/profiles/{id}",   req: "profile:read",                 r: { admin: "ok",   alice: "ok",   carol: "deny", bob: "deny" } },
+    { m: "DELETE", p: "/profiles/{id}", req: "profile:delete",               r: { admin: "ok",   alice: "deny", carol: "deny", bob: "deny" } },
+    { m: "GET",  p: "/orders",          req: "@RequiresDataScope(DEPT)",     r: { admin: "ok",   alice: "ok",   carol: "deny", bob: "deny" } },
+    { m: "POST", p: "/c/login",         req: "白名单 · C 端登录",            r: { admin: "anon", alice: "anon", carol: "anon", bob: "anon" } },
+    { m: "GET",  p: "/c/me",            req: "@RequiresLogin · 路径 c/**",   r: { admin: "deny", alice: "deny", carol: "deny", bob: "ok"   } }
   ];
   var SCOPES = {
-    admin: '<b>admin</b> · 角色 admin(继承全部)· 数据权限 <b>ALL</b> —— 订单接口可见全部 3 个部门数据。',
-    alice: '<b>alice</b> · 角色 user · 部门 d2 · 数据权限 <b>DEPT</b> —— 订单接口仅可见 d2 部门数据。',
-    carol: '<b>carol</b> · 角色 guest · 部门 d3 · 数据权限 <b>SELF</b> —— 低于订单接口要求的 DEPT,直接 403。'
+    admin: '<b>admin</b> · 体系 B · 角色 admin(继承全部)· 数据权限 <b>ALL</b> —— 订单接口可见全部 3 个部门数据;访问 C 端路径被 403。',
+    alice: '<b>alice</b> · 体系 B · 角色 user · 部门 d2 · 数据权限 <b>DEPT</b> —— 订单接口仅可见 d2 部门数据。',
+    carol: '<b>carol</b> · 体系 B · 角色 guest · 部门 d3 · 数据权限 <b>SELF</b> —— 低于订单接口要求的 DEPT,直接 403。',
+    bob: '<b>bob</b> · 体系 <b>C</b> · 角色 member(C 端专属)· 数据权限 SELF —— C 端 token 访问 B 端路径(/admin、/profiles、/orders)一律 403;B 端 token 反向访问 /c/** 同样被拦截。'
   };
   var LABEL = { ok: ["200", "OK"], deny: ["403", "DENY"], anon: ["PASS", "ANON"] };
 
