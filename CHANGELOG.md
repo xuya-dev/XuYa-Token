@@ -26,4 +26,4 @@ All notable changes to this project will be documented in this file.
 - 工程治理:Enforcer(JDK 17+)、JaCoCo 覆盖率报告、release profile(源码/Javadoc 附件)、SECURITY.md
 - 中文网页文档:`docs/index.html`,IDE 终端风格,深浅双模式,含可交互鉴权演示
 
-[0.1.0]: https://github.com/xuya/xuya-token/releases/tag/v0.1.0
+[0.1.0]: https://github.com/xuya-dev/XuYa-Token/releases/tag/v0.1.0
