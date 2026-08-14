@@ -45,6 +45,22 @@ public final class RoleExpander {
      * @return 展开后的角色编码集合
      */
     public static Set<String> expand(String userType, PermissionLoader loader, Set<String> roleCodes) {
+        return expand(userType, loader, roleCodes, null);
+    }
+
+    /**
+     * 按体系展开角色编码集合,并可选地记录每个角色的获得路径
+     * (角色编码 → 传入该角色的父角色编码;直接持有的角色不在此映射中)。
+     * 供鉴权解释器还原继承链使用。
+     *
+     * @param userType         用户体系标识
+     * @param loader           权限数据来源
+     * @param roleCodes        用户直接持有的角色编码
+     * @param inheritedFromOut 承接"角色 → 继承来源"的映射,可为 null(不记录)
+     * @return 展开后的角色编码集合
+     */
+    public static Set<String> expand(String userType, PermissionLoader loader, Set<String> roleCodes,
+                                     java.util.Map<String, String> inheritedFromOut) {
         Set<String> result = new HashSet<>();
         Set<String> visited = new HashSet<>();
         Deque<String> pending = new ArrayDeque<>(roleCodes);
@@ -58,7 +74,12 @@ public final class RoleExpander {
                 }
                 loader.loadRole(userType, code).ifPresent(role -> {
                     result.add(code);
-                    pending.addAll(role.getParentCodes());
+                    for (String parent : role.getParentCodes()) {
+                        if (inheritedFromOut != null) {
+                            inheritedFromOut.putIfAbsent(parent, code);
+                        }
+                        pending.add(parent);
+                    }
                 });
             }
         }

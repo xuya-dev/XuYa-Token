@@ -9,9 +9,10 @@
 ## 特性
 
 - **RBAC 模型**:用户 → 角色 → 权限(resource:action,支持 `*` 通配),角色支持继承
+- **鉴权可解释**:任意判定输出"为什么"——角色继承轨迹、命中权限、拒绝原因;`explain-enabled` 开启运行时调试端点
 - **多体系(端)**:开放体系标识(B/C/OPEN/MINI…不限数量),用户来源、会话、角色、超时策略按体系隔离
-- **数据权限**:SELF / DEPT / DEPT_AND_CHILD / ALL 四级行级过滤,`@RequiresDataScope` 注解 + `DataScopeContext`
-- **注解鉴权**:`@RequiresLogin` / `@RequiresRoles` / `@RequiresPermissions`
+- **数据权限**:SELF / DEPT / DEPT_AND_CHILD / ALL 四级行级过滤,`@RequiresDataScope` 注解 + `DataScopeContext` + **SQL 条件生成器**
+- **注解鉴权**:`@RequiresLogin` / `@RequiresRoles` / `@RequiresPermissions` / `@RequiresDataScope`
 - **SPI 可扩展**:`UserProvider`、`PermissionLoader`、`SessionManager` 均可替换为数据库/Redis 实现
 - **密码加密**:内置 `PasswordEncoder` 接口与 BCrypt 实现,避免明文存储
 - **分布式会话**:`xuya-token-redis` 提供 Redis 会话存储,多节点部署共享登录态
@@ -108,6 +109,26 @@ xuya:
 
 踢人下线可按体系(`invalidateByUserId(UserType.C, userId)`)或跨全部体系执行。
 
+### 鉴权可解释(Explainable Authorization)
+
+"为什么他被拒绝了"不再靠猜:任意权限/角色判定可输出完整依据——角色继承轨迹(直接持有还是继承自谁)、命中权限(通配如何蕴含)、拒绝时的全部已授权清单。
+
+```java
+AuthDecision d = explainer.explain(user, "profile:delete");
+d.isAllowed();   // false
+d.getReason();   // 拒绝:已授予权限 [profile:read],无一蕴含 profile:delete
+d.getRoles();    // [user(直接)],继承角色标注 来源
+```
+
+配置 `xuya.token.explain-enabled=true` 开启运行时调试端点(需登录):
+
+```bash
+GET /xuya/auth/explain?expr=profile:delete
+# { "allowed": false, "matchedBy": null, "reason": "...",
+#   "roles": [{"code":"user","direct":true,...}],
+#   "dataScope": {"type":"DEPT","visibleDeptIds":["d2"]} }
+```
+
 ### 数据权限
 
 角色配置数据权限级别,用户有效级别取全部角色(含继承)中最宽者;`DEPT_AND_CHILD` 需提供 `DeptProvider` Bean 解析部门层级。
@@ -123,6 +144,16 @@ public ... {
     DataScope scope = DataScopeContext.get();
     scope.getVisibleDeptIds(); // DEPT={本部门}; ALL/SELF 为空集
 }
+```
+
+**SQL 条件生成器**:把可见范围直接转成 WHERE 片段与占位参数(存储无关,可接 MyBatis / JdbcTemplate):
+
+```java
+var c = DataScopeSql.of(DataScopeContext.get())
+        .deptColumn("dept_id").userColumn("create_by").build();
+c.getSql();    // "dept_id IN (?, ?)"
+c.getParams(); // ["d2", "d3"]
+// ALL → "1=1";SELF → "create_by = ?";可见范围为空 → "1=0"(安全侧失败)
 ```
 
 ### 分布式会话

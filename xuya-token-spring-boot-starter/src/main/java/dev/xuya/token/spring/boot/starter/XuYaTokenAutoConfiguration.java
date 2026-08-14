@@ -6,6 +6,8 @@ import dev.xuya.token.core.auth.DefaultAuthenticator;
 import dev.xuya.token.core.auth.DefaultDataScopeResolver;
 import dev.xuya.token.core.auth.DefaultPermissionChecker;
 import dev.xuya.token.core.auth.PermissionChecker;
+import dev.xuya.token.core.explain.DefaultPermissionExplainer;
+import dev.xuya.token.core.explain.PermissionExplainer;
 import dev.xuya.token.core.session.InMemorySessionManager;
 import dev.xuya.token.core.session.SessionManager;
 import dev.xuya.token.core.spi.CachedPermissionLoader;
@@ -13,10 +15,12 @@ import dev.xuya.token.core.spi.DeptProvider;
 import dev.xuya.token.core.spi.InMemoryPermissionLoader;
 import dev.xuya.token.core.spi.PermissionLoader;
 import dev.xuya.token.core.spi.UserProvider;
+import dev.xuya.token.spring.boot.starter.explain.AuthExplainController;
 import dev.xuya.token.spring.boot.starter.aspect.AuthorizationAspect;
 import dev.xuya.token.spring.boot.starter.interceptor.XuYaTokenInterceptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -90,6 +94,21 @@ public class XuYaTokenAutoConfiguration {
     public DataScopeResolver dataScopeResolver(PermissionLoader permissionLoader,
                                                ObjectProvider<DeptProvider> deptProvider) {
         return new DefaultDataScopeResolver(permissionLoader, deptProvider.getIfAvailable());
+    }
+
+    /** 提供默认的鉴权解释器,应用可自定义覆盖。 */
+    @Bean
+    @ConditionalOnMissingBean
+    public PermissionExplainer permissionExplainer(PermissionLoader permissionLoader) {
+        return new DefaultPermissionExplainer(permissionLoader);
+    }
+
+    /** 注册鉴权解释调试端点,仅 xuya.token.explain-enabled=true 时生效。 */
+    @Bean
+    @ConditionalOnProperty(name = "xuya.token.explain-enabled", havingValue = "true")
+    public AuthExplainController authExplainController(PermissionExplainer explainer,
+                                                       DataScopeResolver dataScopeResolver) {
+        return new AuthExplainController(explainer, dataScopeResolver);
     }
 
     /** 注册 {@code @Requires*} 注解的鉴权切面。 */

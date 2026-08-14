@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- 鉴权可解释:`PermissionExplainer` SPI 输出判定依据(角色继承轨迹、命中权限、拒绝原因),`xuya.token.explain-enabled=true` 开启 `/xuya/auth/explain` 调试端点
+- 数据权限 SQL 条件生成器:`DataScopeSql` 将可见范围转为 WHERE 片段与占位参数(ALL→1=1 / SELF→用户列 / DEPT→IN / 空→1=0),存储无关
 - 多体系(端)支持:体系为开放字符串标识(B/C/OPEN/MINI…数量不限),用户来源、会话空间、角色权限按体系隔离
 - `UserType` 开放标识工具(常量 + 合法性校验),非法/缺省体系归一化为默认 B 端
 - 会话按体系隔离:token 前缀标识体系(`B-xxx`/`C-xxx`),索引、并发限制、踢人(`invalidateByUserId(体系, 用户)`)按体系独立

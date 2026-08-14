@@ -34,7 +34,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
                 "xuya.token.exclude-paths=/login,/error,/c/login",
                 "xuya.token.user-type-paths.b=/admin/**",
                 "xuya.token.user-type-paths.c=/c/**",
-                "xuya.token.user-types.c.timeout-millis=2592000000"
+                "xuya.token.user-types.c.timeout-millis=2592000000",
+                "xuya.token.explain-enabled=true"
         })
 @AutoConfigureMockMvc
 class XuYaTokenAutoConfigurationTest {
@@ -274,5 +275,27 @@ class XuYaTokenAutoConfigurationTest {
         String bToken = login("admin");
         mockMvc.perform(MockMvcRequestBuilders.get("/c/me").header("Authorization", "Bearer " + bToken))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void explainEndpointOutputsDecisionTrace() throws Exception {
+        // alice(user 角色)解释权限:profile:read 允许并给出命中依据
+        String alice = login("alice");
+        mockMvc.perform(MockMvcRequestBuilders.get("/xuya/auth/explain")
+                        .param("expr", "profile:read")
+                        .header("Authorization", "Bearer " + alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.allowed").value(true))
+                .andExpect(jsonPath("$.matchedBy").value("profile:read"))
+                .andExpect(jsonPath("$.roles[0].code").value("user"))
+                .andExpect(jsonPath("$.dataScope.type").value("DEPT"));
+
+        // 解释未授权权限:拒绝并列出依据
+        mockMvc.perform(MockMvcRequestBuilders.get("/xuya/auth/explain")
+                        .param("expr", "profile:delete")
+                        .header("Authorization", "Bearer " + alice))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.allowed").value(false))
+                .andExpect(jsonPath("$.matchedBy").doesNotExist());
     }
 }

@@ -61,6 +61,12 @@
       "name": "xuya.token.user-type-paths",
       "type": "java.util.Map<java.lang.String,java.util.List<java.lang.String>>",
       "description": "按体系隔离的路径规则:键为体系标识,值为 Ant 模式;路径命中而 token 体系不符返回 403."
+    },
+    {
+      "name": "xuya.token.explain-enabled",
+      "type": "java.lang.Boolean",
+      "description": "鉴权解释调试端点 /xuya/auth/explain 开关(需登录,仅调试用).",
+      "defaultValue": false
     }
   ],
   "hints": [
