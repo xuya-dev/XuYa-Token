@@ -67,6 +67,18 @@
       "type": "java.lang.Boolean",
       "description": "鉴权解释调试端点 /xuya/auth/explain 开关(需登录,仅调试用).",
       "defaultValue": false
+    },
+    {
+      "name": "xuya.token.guard-max-failures",
+      "type": "java.lang.Integer",
+      "description": "登录防爆破:触发锁定的连续失败次数,<=0 不启用.",
+      "defaultValue": 0
+    },
+    {
+      "name": "xuya.token.guard-lock-millis",
+      "type": "java.lang.Long",
+      "description": "登录防爆破:锁定时长(毫秒).",
+      "defaultValue": 300000
     }
   ],
   "hints": [

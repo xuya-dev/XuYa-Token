@@ -1,11 +1,14 @@
 package dev.xuya.token.spring.boot.starter;
 
+import dev.xuya.token.core.audit.AuthAuditListener;
 import dev.xuya.token.core.auth.Authenticator;
 import dev.xuya.token.core.auth.DataScopeResolver;
 import dev.xuya.token.core.auth.DefaultAuthenticator;
 import dev.xuya.token.core.auth.DefaultDataScopeResolver;
 import dev.xuya.token.core.auth.DefaultPermissionChecker;
 import dev.xuya.token.core.auth.PermissionChecker;
+import dev.xuya.token.core.security.InMemoryLoginGuard;
+import dev.xuya.token.core.security.LoginGuard;
 import dev.xuya.token.core.explain.DefaultPermissionExplainer;
 import dev.xuya.token.core.explain.PermissionExplainer;
 import dev.xuya.token.core.session.InMemorySessionManager;
@@ -70,11 +73,23 @@ public class XuYaTokenAutoConfiguration {
                 properties.getMaxSessionsPerUser(), properties.isEvictOldestOnExceed(), settings);
     }
 
-    /** 提供默认的认证门面,应用可自定义覆盖。 */
+    /**
+     * 提供默认认证门面:注入可选的登录守卫与审计监听器;
+     * 配置了防爆破阈值时自动装配内存守卫,应用可自定义覆盖。
+     */
     @Bean
     @ConditionalOnMissingBean
-    public Authenticator authenticator(UserProvider userProvider, SessionManager sessionManager) {
-        return new DefaultAuthenticator(userProvider, sessionManager);
+    public Authenticator authenticator(UserProvider userProvider, SessionManager sessionManager,
+                                       XuYaTokenProperties properties,
+                                       ObjectProvider<LoginGuard> loginGuard,
+                                       ObjectProvider<AuthAuditListener> auditListeners) {
+        LoginGuard guard = loginGuard.getIfAvailable();
+        if (guard == null && properties.getGuardMaxFailures() > 0) {
+            guard = new InMemoryLoginGuard(properties.getGuardMaxFailures(),
+                    properties.getGuardLockMillis());
+        }
+        return new DefaultAuthenticator(userProvider, sessionManager, guard,
+                auditListeners.orderedStream().toList());
     }
 
     /** 提供默认的权限校验器;配置了缓存 TTL 时自动以 {@code CachedPermissionLoader} 包装数据来源。 */

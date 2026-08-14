@@ -22,6 +22,9 @@ xuya:
       c: [/c/**]
     # 鉴权解释调试端点:GET /xuya/auth/explain?expr=profile:delete(需登录)
     explain-enabled: true
+    # 登录防爆破:连续失败 5 次锁定 5 分钟(按体系:账号计数)
+    guard-max-failures: 5
+    guard-lock-millis: 300000
     # JWT 无状态模式示例(需引入 xuya-token-jwt 依赖;与 Redis 会话二选一):
     # jwt:
     #   secret: "change-me-at-least-32-bytes-long-secret"

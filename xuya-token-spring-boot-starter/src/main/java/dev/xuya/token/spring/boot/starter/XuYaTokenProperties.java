@@ -39,6 +39,12 @@ public class XuYaTokenProperties {
     /** JWT 相关配置。 */
     private final Jwt jwt = new Jwt();
 
+    /** 登录防爆破:触发锁定的连续失败次数,<=0 表示不启用。 */
+    private int guardMaxFailures = 0;
+
+    /** 登录防爆破:锁定时长(毫秒),默认 5 分钟。 */
+    private long guardLockMillis = 300_000L;
+
     /** 按体系的策略覆盖(键为体系标识,如 b / c / open),未覆盖的体系沿用全局配置。 */
     private final Map<String, UserTypeProperties> userTypes = new LinkedHashMap<>();
 
@@ -136,6 +142,26 @@ public class XuYaTokenProperties {
     /** 设置按体系隔离的路径规则(键为体系标识,值为 Ant 模式列表)。 */
     public void setUserTypePaths(Map<String, List<String>> userTypePaths) {
         this.userTypePaths = userTypePaths;
+    }
+
+    /** 获取防爆破失败阈值。 */
+    public int getGuardMaxFailures() {
+        return guardMaxFailures;
+    }
+
+    /** 设置防爆破失败阈值,<=0 不启用。 */
+    public void setGuardMaxFailures(int guardMaxFailures) {
+        this.guardMaxFailures = guardMaxFailures;
+    }
+
+    /** 获取防爆破锁定时长(毫秒)。 */
+    public long getGuardLockMillis() {
+        return guardLockMillis;
+    }
+
+    /** 设置防爆破锁定时长(毫秒)。 */
+    public void setGuardLockMillis(long guardLockMillis) {
+        this.guardLockMillis = guardLockMillis;
     }
 
     /** 单个体系的策略覆盖,未设置(null)的项继承全局配置。 */

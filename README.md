@@ -10,6 +10,9 @@
 
 - **RBAC 模型**:用户 → 角色 → 权限(resource:action,支持 `*` 通配),角色支持继承
 - **鉴权可解释**:任意判定输出"为什么"——角色继承轨迹、命中权限、拒绝原因;`explain-enabled` 开启运行时调试端点
+- **SQL 级数据权限**:`xuya-token-mybatis` 拦截器按注解自动改写 SQL,Mapper 零侵入
+- **登录防爆破**:连续失败锁定(`guard-max-failures` / `guard-lock-millis`),按体系:账号计数
+- **审计事件**:`AuthAuditListener` SPI 回调登录成功/失败与注销,对接审计日志与告警
 - **多体系(端)**:开放体系标识(B/C/OPEN/MINI…不限数量),用户来源、会话、角色、超时策略按体系隔离
 - **数据权限**:SELF / DEPT / DEPT_AND_CHILD / ALL 四级行级过滤,`@RequiresDataScope` 注解 + `DataScopeContext` + **SQL 条件生成器**
 - **注解鉴权**:`@RequiresLogin` / `@RequiresRoles` / `@RequiresPermissions` / `@RequiresDataScope`
@@ -58,6 +61,7 @@ xuya:
 | `xuya-token-spring-boot-starter` | Spring Boot 3.x 自动装配 |
 | `xuya-token-redis` | Redis 分布式会话(可选,引入即生效) |
 | `xuya-token-jwt` | JWT 无状态会话(可选,配置密钥后生效) |
+| `xuya-token-mybatis` | MyBatis-Plus 数据权限拦截器(可选,自动改写 SQL) |
 | `xuya-token-demo` | 演示应用 |
 
 ### 角色继承
@@ -154,6 +158,42 @@ var c = DataScopeSql.of(DataScopeContext.get())
 c.getSql();    // "dept_id IN (?, ?)"
 c.getParams(); // ["d2", "d3"]
 // ALL → "1=1";SELF → "create_by = ?";可见范围为空 → "1=0"(安全侧失败)
+```
+
+**MyBatis-Plus 自动拦截**(`xuya-token-mybatis`,Mapper 零侵入):
+
+```java
+// 注册拦截器
+MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
+interceptor.addInnerInterceptor(new DataScopeInterceptor());
+
+// Mapper 方法标注即生效:查询时自动追加可见范围条件
+@DataScopeFilter(alias = "o", deptColumn = "org_id")
+@Select("SELECT * FROM orders o WHERE o.status = #{status}")
+List<Order> selectByStatus(String status);
+// 实际执行:... WHERE (o.status = ?) AND o.org_id IN (#{xuyaP0})
+```
+
+### 登录防爆破与审计
+
+```yaml
+xuya:
+  token:
+    guard-max-failures: 5     # 连续失败 5 次锁定,0 = 不启用
+    guard-lock-millis: 300000 # 锁定 5 分钟
+```
+
+```java
+@Bean
+public AuthAuditListener auditListener() {
+    return new AuthAuditListener() {
+        @Override
+        public void onLoginFailure(String userType, String username) {
+            log.warn("[审计] 登录失败 user={} username={}", userType, username);
+        }
+        // onLoginSuccess / onLogout 同理,可落库或对接告警
+    };
+}
 ```
 
 ### 分布式会话

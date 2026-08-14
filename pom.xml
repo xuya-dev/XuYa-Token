@@ -6,7 +6,7 @@
 
   <groupId>dev.xuya</groupId>
   <artifactId>xuya-token-parent</artifactId>
-  <version>0.2.0-SNAPSHOT</version>
+  <version>0.2.0</version>
   <packaging>pom</packaging>
 
   <name>XuYa-Token</name>
@@ -33,6 +33,7 @@
     <module>xuya-token-spring-boot-starter</module>
     <module>xuya-token-redis</module>
     <module>xuya-token-jwt</module>
+    <module>xuya-token-mybatis</module>
     <module>xuya-token-demo</module>
   </modules>
 
@@ -42,6 +43,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <spring-boot.version>3.3.4</spring-boot.version>
     <jjwt.version>0.12.6</jjwt.version>
+    <mybatis-plus.version>3.5.7</mybatis-plus.version>
     <junit-jupiter.version>5.10.3</junit-jupiter.version>
     <mockito.version>5.12.0</mockito.version>
   </properties>
@@ -71,6 +73,11 @@
         <artifactId>jjwt-jackson</artifactId>
         <version>${jjwt.version}</version>
         <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.baomidou</groupId>
+        <artifactId>mybatis-plus-extension</artifactId>
+        <version>${mybatis-plus.version}</version>
       </dependency>
       <dependency>
         <groupId>org.junit.jupiter</groupId>

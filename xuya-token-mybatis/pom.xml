@@ -10,9 +10,9 @@
     <version>0.2.0</version>
   </parent>
 
-  <artifactId>xuya-token-redis</artifactId>
-  <name>XuYa-Token Redis</name>
-  <description>Redis-backed distributed session storage for XuYa-Token.</description>
+  <artifactId>xuya-token-mybatis</artifactId>
+  <name>XuYa-Token MyBatis</name>
+  <description>MyBatis-Plus interceptor that auto-applies data scope filters to queries.</description>
 
   <dependencies>
     <dependency>
@@ -21,16 +21,12 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-redis</artifactId>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-extension</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.fasterxml.jackson.core</groupId>
-      <artifactId>jackson-databind</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

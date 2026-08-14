@@ -8,7 +8,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-14
+
 ### Added
+- MyBatis-Plus 数据权限拦截器:`xuya-token-mybatis` 模块,Mapper 方法标注 `@DataScopeFilter` 即自动追加可见范围条件,业务 SQL 零侵入
+- 登录防爆破:`LoginGuard` SPI + 内存实现,`guard-max-failures` / `guard-lock-millis` 配置,按体系:账号计数,锁定期 403
+- 审计事件:`AuthAuditListener` SPI 回调登录成功/失败与注销,starter 自动收集注入,监听器异常不影响主流程
 - 鉴权可解释:`PermissionExplainer` SPI 输出判定依据(角色继承轨迹、命中权限、拒绝原因),`xuya.token.explain-enabled=true` 开启 `/xuya/auth/explain` 调试端点
 - 数据权限 SQL 条件生成器:`DataScopeSql` 将可见范围转为 WHERE 片段与占位参数(ALL→1=1 / SELF→用户列 / DEPT→IN / 空→1=0),存储无关
 - 多体系(端)支持:体系为开放字符串标识(B/C/OPEN/MINI…数量不限),用户来源、会话空间、角色权限按体系隔离

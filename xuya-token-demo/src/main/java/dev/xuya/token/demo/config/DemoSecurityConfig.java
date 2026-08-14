@@ -1,5 +1,6 @@
 package dev.xuya.token.demo.config;
 
+import dev.xuya.token.core.audit.AuthAuditListener;
 import dev.xuya.token.core.crypto.BCryptPasswordEncoder;
 import dev.xuya.token.core.crypto.PasswordEncoder;
 import dev.xuya.token.core.model.DataScopeType;
@@ -55,6 +56,30 @@ public class DemoSecurityConfig {
     public DeptProvider deptProvider() {
         Map<String, Set<String>> children = Map.of("d2", Set.of("d3"));
         return deptId -> children.getOrDefault(deptId, Set.of());
+    }
+
+    /** 审计监听:登录/注销事件输出日志,实际项目可落库或对接告警。 */
+    @Bean
+    public AuthAuditListener auditListener() {
+        return new AuthAuditListener() {
+            private final org.slf4j.Logger log =
+                    org.slf4j.LoggerFactory.getLogger("xuya-audit");
+
+            @Override
+            public void onLoginSuccess(String userType, String username, String userId) {
+                log.info("[审计] 登录成功 user={} username={} userId={}", userType, username, userId);
+            }
+
+            @Override
+            public void onLoginFailure(String userType, String username) {
+                log.warn("[审计] 登录失败 user={} username={}", userType, username);
+            }
+
+            @Override
+            public void onLogout(String userType, String userId) {
+                log.info("[审计] 注销 user={} userId={}", userType, userId);
+            }
+        };
     }
 
     /** 用户来源:内存用户表,密码在初始化时加密为 BCrypt 密文;B/C 端账号分表,按体系分别校验。 */
